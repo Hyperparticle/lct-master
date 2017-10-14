@@ -1,4 +1,7 @@
 /**
+ * Analyzes splay tree performance. Given a test file, average path lengths are calculated
+ * and
+ *
  * @date 10/14/17
  * @author Dan Kondratyuk
  */
@@ -29,8 +32,7 @@ void read_file(char *filename) {
 
     while (fgets(line, line_size, file) != NULL)  {
         struct operation op = parse_operation(line);
-
-        printf("%d\n", op.value);
+        do_operation(op);
     }
 
     fclose(file);

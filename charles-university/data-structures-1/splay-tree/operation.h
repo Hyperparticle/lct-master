@@ -6,15 +6,29 @@
 #ifndef SPLAY_TREE_OPERATION_H
 #define SPLAY_TREE_OPERATION_H
 
+/** A splay tree operation code */
 enum opcode {
-    RESET = 0, INSERT, FIND
+    RESET, INSERT, FIND
 };
 
+/**
+ * An operation on a splay tree with a given type and value
+ * to reset a tree, insert a key, or find a key.
+ */
 struct operation {
     enum opcode type;
     int value;
 };
 
-struct operation parse_operation(char *);
+/**
+ * Parses the given string (e.g., "# 1000") as a splay tree operation.
+ * @return The operation corresponding to the given string.
+ */
+struct operation parse_operation(char *str);
+
+/**
+ * Performs the given operation
+ */
+void do_operation(struct operation op);
 
 #endif //SPLAY_TREE_OPERATION_H

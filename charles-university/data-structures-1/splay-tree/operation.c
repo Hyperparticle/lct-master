@@ -7,12 +7,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "operation.h"
+#include "node.h"
+#include "tree.h"
 
-struct operation parse_operation(char *line) {
+struct operation parse_operation(char *str) {
     struct operation op;
 
     // Parse the opcode
-    char *opcode_str = strtok(line, " ");
+    char *opcode_str = strtok(str, " ");
 
     switch (opcode_str[0]) {
         case '#':
@@ -35,4 +37,24 @@ struct operation parse_operation(char *line) {
     op.value = atoi(value_str);
 
     return op;
+}
+
+void reset_root() {
+    // TODO: free the tree
+    root = NULL;
+    tree_size = 0;
+}
+
+void do_operation(struct operation op) {
+    switch (op.type) {
+        case RESET:
+            reset_root();
+            break;
+        case INSERT:
+            insert(op.value);
+            break;
+        case FIND:
+            find(op.value);
+            break;
+    }
 }

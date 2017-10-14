@@ -8,14 +8,6 @@
 #include "node.h"
 
 #include "tree.h"
-struct node *root = NULL;
-
-struct node *init_node(int key) {
-    struct node *node = (struct node *) malloc(sizeof(struct node));
-    node->left = node->right = node->parent = NULL;
-    node->key = key;
-    return node;
-}
 
 bool is_root(struct node *node) {
     return node->parent == NULL;
@@ -124,10 +116,13 @@ void zig_zag(struct node *x) {
     }
 }
 
-void splay(struct node *x) {
+int splay(struct node *x) {
+    int path_length = 0;
+
     while (!is_root(x)) {
         if (is_root(x->parent)) {
             zig(x);
+            path_length++;
         } else {
             struct node *p = x->parent;
             struct node *g = p->parent;
@@ -140,13 +135,17 @@ void splay(struct node *x) {
             } else {
                 zig_zag(x);
             }
+
+            path_length += 2;
         }
     }
 
-    root = x;
+    return path_length;
 }
 
-void splay_naive(struct node *x) {
+int splay_naive(struct node *x) {
+    int path_length = 0;
+
     while (!is_root(x)) {
         struct node *p = x->parent;
 
@@ -155,7 +154,9 @@ void splay_naive(struct node *x) {
         } else { // x == p->right
             rotate_left(p);
         }
+
+        path_length++;
     }
 
-    root = x;
+    return path_length;
 }

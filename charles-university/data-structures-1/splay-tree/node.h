@@ -12,13 +12,7 @@
 struct node {
     struct node *left, *right, *parent;
     int key;
-} *root;
-
-/**
- * Allocates space for a blank node and returns it.
- * @return A node with the given key and pointers set to NULL
- */
-struct node *init_node(int key);
+};
 
 /** @return whether the given node is the root node */
 bool is_root(struct node *node);
@@ -48,9 +42,9 @@ void zig_zag(struct node *x);
  * A splay operation that moves the given node up to the root using the
  * defined conditions for the zig, zig-zig, and zig-zag operations.
  */
-void splay(struct node *x);
+int splay(struct node *x);
 
 /** A splay operation that moves the given node up to the root using only simple rotations. */
-void splay_naive(struct node *x);
+int splay_naive(struct node *x);
 
 #endif //SPLAY_TREE_NODE_H

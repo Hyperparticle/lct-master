@@ -39,16 +39,10 @@ struct operation parse_operation(char *str) {
     return op;
 }
 
-void reset_root() {
-    // TODO: free the tree
-    root = NULL;
-    tree_size = 0;
-}
-
 void do_operation(struct operation op) {
     switch (op.type) {
         case RESET:
-            reset_root();
+            reset_tree(op.value);
             break;
         case INSERT:
             insert(op.value);

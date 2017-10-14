@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "operation.h"
+#include "tree.h"
 
 void read_file(char *);
 
@@ -27,11 +28,19 @@ void read_file(char *filename) {
     }
 
     // Read line by line
-    const size_t line_size = 300;
-    char* line = malloc(line_size);
+    const size_t line_size = 100;
+    char *line = malloc(line_size);
 
     while (fgets(line, line_size, file) != NULL)  {
         struct operation op = parse_operation(line);
+
+        if (op.type == RESET && splay_tree.path_lengths != NULL) {
+            for (int i = 0; i < splay_tree.path_lengths_i; i++) {
+                printf("%d,", splay_tree.path_lengths[i]);
+            }
+            printf("\n");
+        }
+
         do_operation(op);
     }
 

@@ -13,8 +13,14 @@
 
 void read_file(char *);
 
-int main(int argc, char *argv) {
-    read_file("../test/test-10.txt");
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: splaytree [filename]\n");
+        fprintf(stderr, "filename - output of splaygen");
+        exit(EXIT_FAILURE);
+    }
+
+    read_file(argv[1]);
 
     return 0;
 }
@@ -35,10 +41,20 @@ void read_file(char *filename) {
         struct operation op = parse_operation(line);
 
         if (op.type == RESET && splay_tree.path_lengths != NULL) {
-            for (int i = 0; i < splay_tree.path_lengths_i; i++) {
-                printf("%d,", splay_tree.path_lengths[i]);
+            printf("%d,", splay_tree.capacity);
+            printf("%d,", splay_tree.path_lengths_i);
+
+            long sum = 0;
+
+            for (int i = 0; i < splay_tree.path_lengths_i - 1; i++) {
+                sum += splay_tree.path_lengths[i];
+//                printf("%d,", splay_tree.path_lengths[i]);
             }
-            printf("\n");
+//            printf("%d\n", splay_tree.path_lengths[splay_tree.path_lengths_i - 1]);
+
+            double average = (double) sum / (double) splay_tree.path_lengths_i;
+
+            printf("%f\n", average);
         }
 
         do_operation(op);

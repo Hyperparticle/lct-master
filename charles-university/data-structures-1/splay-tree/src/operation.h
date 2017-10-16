@@ -6,6 +6,8 @@
 #ifndef SPLAY_TREE_OPERATION_H
 #define SPLAY_TREE_OPERATION_H
 
+#include <stdbool.h>
+
 /** A splay tree operation code */
 enum opcode {
     RESET, INSERT, FIND
@@ -30,6 +32,6 @@ struct operation parse_operation(char *str);
  * Performs the given operation
  * @return the path length to find/insert a key (a reset operation returns 0)
  */
-int do_operation(struct operation op);
+int do_operation(struct operation op, bool naive);
 
 #endif //SPLAY_TREE_OPERATION_H

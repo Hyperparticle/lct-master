@@ -7,9 +7,6 @@
 #include <stdlib.h>
 #include "tree.h"
 
-//  Uncomment this to run the naive implementation
-//#define NAIVE
-
 struct tree splay_tree = { NULL, 0, 0, NULL, 0 };
 
 struct node *init_node(int key) {
@@ -45,7 +42,7 @@ void reset_tree(int capacity) {
     splay_tree.node_buffer_i = 0;
 }
 
-void insert(int key, int *path_length) {
+void insert(int key, bool naive, int *path_length) {
     struct node *current = splay_tree.root;
     struct node *parent = NULL;
 
@@ -79,17 +76,17 @@ void insert(int key, int *path_length) {
         parent->right = insert;
     }
 
-#ifdef NAIVE
-    splay_naive(insert);
-#else
-    splay(insert);
-#endif
+    if (naive) {
+        splay_naive(insert);
+    } else {
+        splay(insert);
+    }
 
     splay_tree.root = insert;
     splay_tree.tree_size++;
 }
 
-struct node *find(int key, int *path_length) {
+struct node *find(int key, bool naive, int *path_length) {
     struct node *current = splay_tree.root;
 
     *path_length = 0;
@@ -104,11 +101,12 @@ struct node *find(int key, int *path_length) {
             *path_length += 1;
         } else {
             // Found the node with key
-#ifdef NAIVE
-            splay_naive(current);
-#else
-            splay(current);
-#endif
+            if (naive) {
+                splay_naive(current);
+            } else {
+                splay(current);
+            }
+
             splay_tree.root = current;
 
             return current;

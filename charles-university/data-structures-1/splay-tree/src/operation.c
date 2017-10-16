@@ -39,7 +39,7 @@ struct operation parse_operation(char *str) {
     return op;
 }
 
-int do_operation(struct operation op) {
+int do_operation(struct operation op, bool naive) {
     int path_length = 0;
 
     switch (op.type) {
@@ -47,10 +47,10 @@ int do_operation(struct operation op) {
             reset_tree(op.value);
             return 0;
         case INSERT:
-            insert(op.value, &path_length);
+            insert(op.value, naive, &path_length);
             return path_length;
         case FIND:
-            find(op.value, &path_length);
+            find(op.value, naive, &path_length);
             return path_length;
     }
 }

@@ -10,23 +10,26 @@ do
     echo ${i},$(./splaygen -s ${id} -t ${i} | ./splaytree)
 done
 
+echo
+
+echo "Uniform subset test (naive)"
+for i in "${T[@]}"
+do
+    echo ${i},$(./splaygen -s ${id} -t ${i} | ./splaytree -n)
+done
+
+echo
+
 echo "Sequential test"
 for i in "${T[@]}"
 do
-    echo ${i},$(./splaygen -s ${id} -t ${i} -b | ./splaytree)
+    echo ${i},$(./splaygen -s ${id} -b | ./splaytree)
 done
 
-
-T=(100 10000 1000000)
-
-echo "Sequential test"
-for i in "${T[@]}"
-do
-    echo ${i},$(./splaygen -s ${id} -t ${i} -b | ./splaytree)
-done
+echo
 
 echo "Sequential test (naive)"
 for i in "${T[@]}"
 do
-    echo ${i},$(./splaygen -s ${id} -t ${i} -b | ./splaytree -n)
+    echo ${i},$(./splaygen -s ${id} -b | ./splaytree -n)
 done

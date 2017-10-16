@@ -12,7 +12,7 @@
 #include <string.h>
 #include "operation.h"
 
-void read_input();
+void read_input(FILE *stream);
 void print_usage();
 
 static bool naive = false;
@@ -24,12 +24,12 @@ int main(int argc, char **argv) {
         print_usage();
     }
 
-    read_input();
+    read_input(stdin);
 
     return 0;
 }
 
-void read_input() {
+void read_input(FILE *stream) {
     // Read line by line
     const size_t line_size = 200;
     char line[line_size];
@@ -37,7 +37,7 @@ void read_input() {
     unsigned long path_length_sum = 0;
     unsigned long path_length_count = 0;
 
-    while (fgets(line, line_size, stdin) != NULL)  {
+    while (fgets(line, line_size, stream) != NULL)  {
         struct operation op = parse_operation(line);
 
         int value = do_operation(op, naive);

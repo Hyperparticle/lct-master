@@ -39,16 +39,18 @@ struct operation parse_operation(char *str) {
     return op;
 }
 
-void do_operation(struct operation op) {
+int do_operation(struct operation op) {
+    int path_length = 0;
+
     switch (op.type) {
         case RESET:
             reset_tree(op.value);
-            break;
+            return 0;
         case INSERT:
-            insert(op.value);
-            break;
+            insert(op.value, &path_length);
+            return path_length;
         case FIND:
-            find(op.value);
-            break;
+            find(op.value, &path_length);
+            return path_length;
     }
 }

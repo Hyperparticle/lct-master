@@ -28,7 +28,8 @@ struct operation parse_operation(char *str);
 
 /**
  * Performs the given operation
+ * @return the path length to find/insert a key (a reset operation returns 0)
  */
-void do_operation(struct operation op);
+int do_operation(struct operation op);
 
 #endif //SPLAY_TREE_OPERATION_H

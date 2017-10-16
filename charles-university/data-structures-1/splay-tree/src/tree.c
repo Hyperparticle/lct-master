@@ -10,9 +10,14 @@
 //  Uncomment this to run the naive implementation
 //#define NAIVE
 
-struct tree splay_tree = { NULL, 0, 0, NULL, NULL, 0, 0 };
+struct tree splay_tree = { NULL, 0, 0, NULL, 0 };
 
 struct node *init_node(int key) {
+    if (splay_tree.node_buffer_i >= splay_tree.capacity) {
+        printf("Unable to allocate more nodes: overflow (%d)\n", splay_tree.capacity);
+        exit(EXIT_FAILURE);
+    }
+
     struct node *node = (struct node *) malloc(sizeof(struct node));
     node->left = node->right = node->parent = NULL;
     node->key = key;
@@ -32,24 +37,19 @@ void reset_tree(int capacity) {
         free(splay_tree.node_buffer);
     }
 
-    if (splay_tree.path_lengths != NULL) {
-        free(splay_tree.path_lengths);
-    }
-
     splay_tree.root = NULL;
     splay_tree.tree_size = 0;
     splay_tree.capacity = capacity;
 
     splay_tree.node_buffer = malloc(capacity * sizeof(struct node));
-    splay_tree.path_lengths = malloc(capacity * 100 * sizeof(int));
-
     splay_tree.node_buffer_i = 0;
-    splay_tree.path_lengths_i = 0;
 }
 
-void insert(int key) {
+void insert(int key, int *path_length) {
     struct node *current = splay_tree.root;
     struct node *parent = NULL;
+
+    *path_length = 0;
 
     // Navigate the binary tree
     while (current != NULL) {
@@ -57,9 +57,12 @@ void insert(int key) {
 
         if (key < current->key) {
             current = current->left;
+            *path_length += 1;
         } else if (key > current->key) {
             current = current->right;
+            *path_length += 1;
         } else {
+            *path_length = 0;
             return; // If the key exists, ignore insert
         }
     }
@@ -86,26 +89,27 @@ void insert(int key) {
     splay_tree.tree_size++;
 }
 
-struct node *find(int key) {
+struct node *find(int key, int *path_length) {
     struct node *current = splay_tree.root;
+
+    *path_length = 0;
 
     // Navigate the binary tree
     while (current != NULL) {
         if (key < current->key) {
             current = current->left;
+            *path_length += 1;
         } else if (key > current->key) {
             current = current->right;
+            *path_length += 1;
         } else {
             // Found the node with key
 #ifdef NAIVE
-            int path_length = splay_naive(current);
+            splay_naive(current);
 #else
-            int path_length = splay(current);
+            splay(current);
 #endif
             splay_tree.root = current;
-
-            splay_tree.path_lengths[splay_tree.path_lengths_i] = path_length;
-            splay_tree.path_lengths_i++;
 
             return current;
         }

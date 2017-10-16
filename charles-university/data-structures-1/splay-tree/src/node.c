@@ -116,13 +116,11 @@ void zig_zag(struct node *x) {
     }
 }
 
-int splay(struct node *x) {
-    int path_length = 0;
+void splay(struct node *x) {
 
     while (!is_root(x)) {
         if (is_root(x->parent)) {
             zig(x);
-            path_length++;
         } else {
             struct node *p = x->parent;
             struct node *g = p->parent;
@@ -135,17 +133,11 @@ int splay(struct node *x) {
             } else {
                 zig_zag(x);
             }
-
-            path_length += 2;
         }
     }
-
-    return path_length;
 }
 
-int splay_naive(struct node *x) {
-    int path_length = 0;
-
+void splay_naive(struct node *x) {
     while (!is_root(x)) {
         struct node *p = x->parent;
 
@@ -154,9 +146,5 @@ int splay_naive(struct node *x) {
         } else { // x == p->right
             rotate_left(p);
         }
-
-        path_length++;
     }
-
-    return path_length;
 }

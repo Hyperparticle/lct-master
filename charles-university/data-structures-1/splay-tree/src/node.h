@@ -42,9 +42,9 @@ void zig_zag(struct node *x);
  * A splay operation that moves the given node up to the root using the
  * defined conditions for the zig, zig-zig, and zig-zag operations.
  */
-int splay(struct node *x);
+void splay(struct node *x);
 
 /** A splay operation that moves the given node up to the root using only simple rotations. */
-int splay_naive(struct node *x);
+void splay_naive(struct node *x);
 
 #endif //SPLAY_TREE_NODE_H

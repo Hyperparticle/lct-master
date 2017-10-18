@@ -13,7 +13,7 @@ struct tree {
     struct node *root; // The root of the tree
     int tree_size; // The number of nodes in the tree
     int capacity;  // The maximum number of nodes in the tree
-    struct node **node_buffer; // A buffer containing all nodes
+    struct node *node_buffer; // A buffer containing all nodes
     int node_buffer_i;
 } splay_tree;
 

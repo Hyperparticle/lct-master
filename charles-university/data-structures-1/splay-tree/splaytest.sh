@@ -8,7 +8,8 @@ T=(10 100 1000 10000 100000 1000000)
 echo "Uniform subset test"
 for i in "${T[@]}"
 do
-    echo ${i},$(./splaygen -s ${id} -t ${i} ${end} | ./splaytree)
+    echo ${i}
+    ./splaygen -s ${id} -t ${i} ${end} | ./splaytree
 done
 
 echo
@@ -16,15 +17,16 @@ echo
 echo "Uniform subset test (naive)"
 for i in "${T[@]}"
 do
-    echo ${i},$(./splaygen -s ${id} -t ${i} ${end} | ./splaytree -n)
+    echo ${i}
+    ./splaygen -s ${id} -t ${i} ${end} | ./splaytree -n
 done
 
 echo
 
 echo "Sequential test"
-echo $(./splaygen -s ${id} -b ${end} | ./splaytree)
+./splaygen -s ${id} -b ${end} | ./splaytree
 
 echo
 
 echo "Sequential test (naive)"
-echo $(./splaygen -s ${id} -b ${end} | ./splaytree -n)
+./splaygen -s ${id} -b ${end} | ./splaytree -n

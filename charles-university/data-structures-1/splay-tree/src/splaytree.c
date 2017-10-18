@@ -34,23 +34,30 @@ void read_input(FILE *stream) {
     const size_t line_size = 200;
     char line[line_size];
 
-    unsigned long path_length_sum = 0;
-    unsigned long path_length_count = 0;
+    unsigned long path_length_sum = 0, path_length_count = 0;
+    double average = 0;
 
     while (fgets(line, line_size, stream) != NULL)  {
         struct operation op = parse_operation(line);
 
         int value = do_operation(op, naive);
 
-        if (op.type == FIND) {
-            path_length_sum += value;
-            path_length_count += 1;
+        switch (op.type) {
+            case RESET:
+                if (path_length_count != 0) {
+                    average = (double) path_length_sum / (double) path_length_count;
+                    printf("%d,%f\n", op.value, average);
+                }
+               
+                path_length_sum = path_length_count = 0;
+                break;
+            case FIND:
+                path_length_sum += value;
+                path_length_count += 1;
+                break;
         }
     }
 
-    double average = (double) path_length_sum / (double) path_length_count;
-
-    printf("%f\n", average);
 }
 
 void print_usage() {

@@ -13,6 +13,7 @@
 #include "operation.h"
 
 void read_input(FILE *stream);
+void print_average(unsigned long path_length_sum, unsigned long path_length_count, int tree_size);
 void print_usage();
 
 static bool naive = false;
@@ -37,23 +38,19 @@ void read_input(FILE *stream) {
     unsigned long path_length_sum = 0, path_length_count = 0;
     double average = 0;
 
-    struct operation prev_op;
-    struct operation op;
+    int tree_size = 0;
+    struct operation op = { RESET, 0 };
 
     while (fgets(line, line_size, stream) != NULL)  {
-        prev_op = op;
-        struct operation op = parse_operation(line);
+        op = parse_operation(line);
 
         int value = do_operation(op, naive);
 
         switch (op.type) {
             case RESET:
-                if (path_length_count != 0) {
-                    average = (double) path_length_sum / (double) path_length_count;
-                    printf("%d,%f\n", prev_op.value, average);
-                }
-               
+                print_average(path_length_sum, path_length_count, tree_size);
                 path_length_sum = path_length_count = 0;
+                tree_size = op.value;
                 break;
             case FIND:
                 path_length_sum += value;
@@ -62,6 +59,14 @@ void read_input(FILE *stream) {
         }
     }
 
+    print_average(path_length_sum, path_length_count, tree_size);
+}
+
+void print_average(unsigned long path_length_sum, unsigned long path_length_count, int tree_size) {
+    if (path_length_count != 0) {
+        double average = (double) path_length_sum / (double) path_length_count;
+        printf("%d,%f\n", tree_size, average);
+    }
 }
 
 void print_usage() {

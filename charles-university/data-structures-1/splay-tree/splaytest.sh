@@ -8,8 +8,7 @@ T=(10 100 1000 10000 100000 1000000)
 echo "Uniform subset test"
 for i in "${T[@]}"
 do
-    echo ${i}
-    ./splaygen -s ${id} -t ${i} ${end} | ./splaytree
+    ./splaygen -s ${id} -t ${i} ${end} | ./splaytree | awk '$0="'${i}',"$0'
 done
 
 echo
@@ -17,8 +16,7 @@ echo
 echo "Uniform subset test (naive)"
 for i in "${T[@]}"
 do
-    echo ${i}
-    ./splaygen -s ${id} -t ${i} ${end} | ./splaytree -n
+    ./splaygen -s ${id} -t ${i} ${end} | ./splaytree -n | awk '$0="'${i}',"$0'
 done
 
 echo

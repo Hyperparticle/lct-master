@@ -10,11 +10,6 @@
 struct tree splay_tree = { NULL, 0, 0, NULL, 0 };
 
 struct node *init_node(int key) {
-    // if (splay_tree.node_buffer_i >= splay_tree.capacity) {
-    //     printf("Unable to allocate more nodes: overflow (%d)\n", splay_tree.capacity);
-    //     exit(EXIT_FAILURE);
-    // }
-
     struct node *node = &splay_tree.node_buffer[splay_tree.node_buffer_i];
     node->left = node->right = node->parent = NULL;
     node->key = key;

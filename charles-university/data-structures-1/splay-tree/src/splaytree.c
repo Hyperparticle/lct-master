@@ -48,10 +48,9 @@ void read_input(FILE *stream) {
 
     // Used for statistics
     unsigned long path_length_sum = 0, path_length_count = 0;
-    double average = 0;
 
     int tree_size = 0;
-    struct operation op = { RESET, 0 };
+    struct operation op;
 
     // Read line by line
     // Perform each operation and print statistics
@@ -69,6 +68,8 @@ void read_input(FILE *stream) {
             case FIND:
                 path_length_sum += value;
                 path_length_count += 1;
+                break;
+            default:
                 break;
         }
     }

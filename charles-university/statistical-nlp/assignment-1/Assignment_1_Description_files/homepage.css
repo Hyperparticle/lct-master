@@ -1,0 +1,96 @@
+body {
+	margin: 1em;
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	text-align: justify;
+	font-size: 0.90em;
+}
+
+div.language,
+div.my_photo
+{
+  float: right;
+  clear: both;
+}
+
+div.main {
+	border: thin solid #55451c;
+	padding: 1em 2em;
+}
+
+h1, h2 {
+	text-align: left;
+}
+h1
+{
+  font-size: 2.0em;
+}
+h2
+{
+  font-size: 1.3em;
+  font-weight: normal;
+	clear: both;
+}
+h3
+{
+  font-size: 1.1em;
+}
+img {
+	border-width: 0;
+}
+
+a {
+	text-decoration: underline;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:visited {
+}
+
+li.sep {
+	margin-top: 0.41em;
+}
+
+ul.nomarker {
+	list-style-type: none;
+}
+
+/* ***** */
+
+
+body
+{
+	color: #55451c;
+	background-color: #ffffff;
+}
+div.main
+{
+	border-color: #978047;
+	background-color: #FFFAEE;
+}
+
+
+h1,
+h2
+{
+  color: #ee8822;
+color: #f47b20;
+}
+
+a
+{
+	color: #95763A;
+}
+
+a:visited
+{
+	color: #BF8F30;
+}
+
+a:hover
+{
+  color: #ee8822;
+color: #f47b20;
+}

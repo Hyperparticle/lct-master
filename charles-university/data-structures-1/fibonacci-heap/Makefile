@@ -48,10 +48,10 @@ RM = /home/hyper/Documents/clion-2017.2.3/bin/cmake/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/splay-tree
+CMAKE_SOURCE_DIR = /home/hyper/Documents/drive/code/lct/cuni_data_structures_1/fibonacci-heap
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/splay-tree
+CMAKE_BINARY_DIR = /home/hyper/Documents/drive/code/lct/cuni_data_structures_1/fibonacci-heap
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -80,9 +80,9 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/splay-tree/CMakeFiles /home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/splay-tree/CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hyper/Documents/drive/code/lct/cuni_data_structures_1/fibonacci-heap/CMakeFiles /home/hyper/Documents/drive/code/lct/cuni_data_structures_1/fibonacci-heap/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/splay-tree/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/hyper/Documents/drive/code/lct/cuni_data_structures_1/fibonacci-heap/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -111,30 +111,111 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named splaytree
+# Target rules for targets named fibheap
 
 # Build rule for target.
-splaytree: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 splaytree
-.PHONY : splaytree
+fibheap: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 fibheap
+.PHONY : fibheap
 
 # fast build rule for target.
-splaytree/fast:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/build
-.PHONY : splaytree/fast
+fibheap/fast:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/build
+.PHONY : fibheap/fast
 
 #=============================================================================
-# Target rules for targets named splaygen
+# Target rules for targets named heapgen
 
 # Build rule for target.
-splaygen: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 splaygen
-.PHONY : splaygen
+heapgen: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 heapgen
+.PHONY : heapgen
 
 # fast build rule for target.
-splaygen/fast:
-	$(MAKE) -f CMakeFiles/splaygen.dir/build.make CMakeFiles/splaygen.dir/build
-.PHONY : splaygen/fast
+heapgen/fast:
+	$(MAKE) -f CMakeFiles/heapgen.dir/build.make CMakeFiles/heapgen.dir/build
+.PHONY : heapgen/fast
+
+src/fibheap.o: src/fibheap.c.o
+
+.PHONY : src/fibheap.o
+
+# target to build an object file
+src/fibheap.c.o:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/fibheap.c.o
+.PHONY : src/fibheap.c.o
+
+src/fibheap.i: src/fibheap.c.i
+
+.PHONY : src/fibheap.i
+
+# target to preprocess a source file
+src/fibheap.c.i:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/fibheap.c.i
+.PHONY : src/fibheap.c.i
+
+src/fibheap.s: src/fibheap.c.s
+
+.PHONY : src/fibheap.s
+
+# target to generate assembly for a file
+src/fibheap.c.s:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/fibheap.c.s
+.PHONY : src/fibheap.c.s
+
+src/heap.o: src/heap.c.o
+
+.PHONY : src/heap.o
+
+# target to build an object file
+src/heap.c.o:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/heap.c.o
+.PHONY : src/heap.c.o
+
+src/heap.i: src/heap.c.i
+
+.PHONY : src/heap.i
+
+# target to preprocess a source file
+src/heap.c.i:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/heap.c.i
+.PHONY : src/heap.c.i
+
+src/heap.s: src/heap.c.s
+
+.PHONY : src/heap.s
+
+# target to generate assembly for a file
+src/heap.c.s:
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/heap.c.s
+.PHONY : src/heap.c.s
+
+src/heapgen.o: src/heapgen.cpp.o
+
+.PHONY : src/heapgen.o
+
+# target to build an object file
+src/heapgen.cpp.o:
+	$(MAKE) -f CMakeFiles/heapgen.dir/build.make CMakeFiles/heapgen.dir/src/heapgen.cpp.o
+.PHONY : src/heapgen.cpp.o
+
+src/heapgen.i: src/heapgen.cpp.i
+
+.PHONY : src/heapgen.i
+
+# target to preprocess a source file
+src/heapgen.cpp.i:
+	$(MAKE) -f CMakeFiles/heapgen.dir/build.make CMakeFiles/heapgen.dir/src/heapgen.cpp.i
+.PHONY : src/heapgen.cpp.i
+
+src/heapgen.s: src/heapgen.cpp.s
+
+.PHONY : src/heapgen.s
+
+# target to generate assembly for a file
+src/heapgen.cpp.s:
+	$(MAKE) -f CMakeFiles/heapgen.dir/build.make CMakeFiles/heapgen.dir/src/heapgen.cpp.s
+.PHONY : src/heapgen.cpp.s
 
 src/node.o: src/node.c.o
 
@@ -142,7 +223,7 @@ src/node.o: src/node.c.o
 
 # target to build an object file
 src/node.c.o:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/node.c.o
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/node.c.o
 .PHONY : src/node.c.o
 
 src/node.i: src/node.c.i
@@ -151,7 +232,7 @@ src/node.i: src/node.c.i
 
 # target to preprocess a source file
 src/node.c.i:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/node.c.i
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/node.c.i
 .PHONY : src/node.c.i
 
 src/node.s: src/node.c.s
@@ -160,7 +241,7 @@ src/node.s: src/node.c.s
 
 # target to generate assembly for a file
 src/node.c.s:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/node.c.s
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/node.c.s
 .PHONY : src/node.c.s
 
 src/operation.o: src/operation.c.o
@@ -169,7 +250,7 @@ src/operation.o: src/operation.c.o
 
 # target to build an object file
 src/operation.c.o:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/operation.c.o
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/operation.c.o
 .PHONY : src/operation.c.o
 
 src/operation.i: src/operation.c.i
@@ -178,7 +259,7 @@ src/operation.i: src/operation.c.i
 
 # target to preprocess a source file
 src/operation.c.i:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/operation.c.i
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/operation.c.i
 .PHONY : src/operation.c.i
 
 src/operation.s: src/operation.c.s
@@ -187,89 +268,8 @@ src/operation.s: src/operation.c.s
 
 # target to generate assembly for a file
 src/operation.c.s:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/operation.c.s
+	$(MAKE) -f CMakeFiles/fibheap.dir/build.make CMakeFiles/fibheap.dir/src/operation.c.s
 .PHONY : src/operation.c.s
-
-src/splaygen.o: src/splaygen.c.o
-
-.PHONY : src/splaygen.o
-
-# target to build an object file
-src/splaygen.c.o:
-	$(MAKE) -f CMakeFiles/splaygen.dir/build.make CMakeFiles/splaygen.dir/src/splaygen.c.o
-.PHONY : src/splaygen.c.o
-
-src/splaygen.i: src/splaygen.c.i
-
-.PHONY : src/splaygen.i
-
-# target to preprocess a source file
-src/splaygen.c.i:
-	$(MAKE) -f CMakeFiles/splaygen.dir/build.make CMakeFiles/splaygen.dir/src/splaygen.c.i
-.PHONY : src/splaygen.c.i
-
-src/splaygen.s: src/splaygen.c.s
-
-.PHONY : src/splaygen.s
-
-# target to generate assembly for a file
-src/splaygen.c.s:
-	$(MAKE) -f CMakeFiles/splaygen.dir/build.make CMakeFiles/splaygen.dir/src/splaygen.c.s
-.PHONY : src/splaygen.c.s
-
-src/splaytree.o: src/splaytree.c.o
-
-.PHONY : src/splaytree.o
-
-# target to build an object file
-src/splaytree.c.o:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/splaytree.c.o
-.PHONY : src/splaytree.c.o
-
-src/splaytree.i: src/splaytree.c.i
-
-.PHONY : src/splaytree.i
-
-# target to preprocess a source file
-src/splaytree.c.i:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/splaytree.c.i
-.PHONY : src/splaytree.c.i
-
-src/splaytree.s: src/splaytree.c.s
-
-.PHONY : src/splaytree.s
-
-# target to generate assembly for a file
-src/splaytree.c.s:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/splaytree.c.s
-.PHONY : src/splaytree.c.s
-
-src/tree.o: src/tree.c.o
-
-.PHONY : src/tree.o
-
-# target to build an object file
-src/tree.c.o:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/tree.c.o
-.PHONY : src/tree.c.o
-
-src/tree.i: src/tree.c.i
-
-.PHONY : src/tree.i
-
-# target to preprocess a source file
-src/tree.c.i:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/tree.c.i
-.PHONY : src/tree.c.i
-
-src/tree.s: src/tree.c.s
-
-.PHONY : src/tree.s
-
-# target to generate assembly for a file
-src/tree.c.s:
-	$(MAKE) -f CMakeFiles/splaytree.dir/build.make CMakeFiles/splaytree.dir/src/tree.c.s
-.PHONY : src/tree.c.s
 
 # Help Target
 help:
@@ -279,23 +279,23 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... splaytree"
-	@echo "... splaygen"
+	@echo "... fibheap"
+	@echo "... heapgen"
+	@echo "... src/fibheap.o"
+	@echo "... src/fibheap.i"
+	@echo "... src/fibheap.s"
+	@echo "... src/heap.o"
+	@echo "... src/heap.i"
+	@echo "... src/heap.s"
+	@echo "... src/heapgen.o"
+	@echo "... src/heapgen.i"
+	@echo "... src/heapgen.s"
 	@echo "... src/node.o"
 	@echo "... src/node.i"
 	@echo "... src/node.s"
 	@echo "... src/operation.o"
 	@echo "... src/operation.i"
 	@echo "... src/operation.s"
-	@echo "... src/splaygen.o"
-	@echo "... src/splaygen.i"
-	@echo "... src/splaygen.s"
-	@echo "... src/splaytree.o"
-	@echo "... src/splaytree.i"
-	@echo "... src/splaytree.s"
-	@echo "... src/tree.o"
-	@echo "... src/tree.i"
-	@echo "... src/tree.s"
 .PHONY : help
 
 

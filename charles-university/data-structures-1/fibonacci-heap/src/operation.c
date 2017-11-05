@@ -12,10 +12,10 @@
 #include "heap.h"
 
 struct operation parse_operation(char *str) {
-    struct operation op = { NULL, 0, 0 };
+    struct operation op = { RESET, 0, 0 };
 
     // Parse the opcode
-    char *opcode_str = strtok(str, " ");
+    char *opcode_str = strtok(str, " \n");
 
     // Parse the value
     if (strcmp(opcode_str, "#") == 0) {
@@ -59,8 +59,10 @@ int do_operation(struct operation op, bool naive) {
     switch (op.type) {
         case RESET:
             reset(op.element);
+            break;
         case INSERT:
             insert(op.element, op.key, naive);
+            break;
         case DELETE_MIN:
             delete_min(naive, &steps);
             break;

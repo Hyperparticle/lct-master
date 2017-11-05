@@ -3,18 +3,71 @@
  * @author Dan Kondratyuk
  */
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "node.h"
 
-void merge_node(struct node *end_node, struct node *new_end) {
-    struct node *leftmost = end_node->right;
-    end_node->right = new_end;
-    leftmost->left = new_end;
-    new_end->left = end_node;
-    new_end->right = leftmost;
+struct node *merge_list(struct node *list0, struct node *list1) {
+    if (list0 == NULL) { return list1; }
+    if (list1 == NULL) { return list0; }
+
+    struct node *last0 = list0->right;
+    struct node *last1 = list1->left;
+
+    list0->right = list1;
+    list1->left = list0;
+    last0->left = last1;
+    last1->right = last0;
+
+    return list0;
 }
 
-void join(struct node *left, struct node *right) {
+struct node *join(struct node *left, struct node *right) {
+    if (left == right) {
+        fprintf(stderr, "Cannot join node with itself\n");
+        exit(EXIT_FAILURE);
+    }
 
+    if (right->key < left->key) {
+        return join(right, left);
+    }
+
+    // Detach right
+    right->left->right = right->right;
+    right->right->left = right->left;
+    right->left = right->right = right;
+
+    if (left->child != NULL) {
+        merge_list(left->child, right);
+    }
+
+    right->parent = left;
+    left->child = right;
+    left->child_count++;
+
+    return left;
+}
+
+int ceil_log2(unsigned long long x) {
+    static const unsigned long long t[6] = {
+            0xFFFFFFFF00000000ull,
+            0x00000000FFFF0000ull,
+            0x000000000000FF00ull,
+            0x00000000000000F0ull,
+            0x000000000000000Cull,
+            0x0000000000000002ull
+    };
+
+    int y = (((x & (x - 1)) == 0) ? 0 : 1);
+    int j = 32;
+    int i;
+
+    for (i = 0; i < 6; i++) {
+        int k = (((x & t[i]) == 0) ? 0 : j);
+        y += k;
+        x >>= k;
+        j >>= 1;
+    }
+
+    return y;
 }

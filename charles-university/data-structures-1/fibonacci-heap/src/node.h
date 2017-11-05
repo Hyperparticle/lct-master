@@ -17,9 +17,15 @@ struct node {
     bool marked;
 };
 
-/** Add a node to the end of a circular linked list */
-void merge_node(struct node *end_node, struct node *new_end);
+/** Merge two circular linked lists together */
+struct node *merge_list(struct node *list0, struct node *list1);
 
-void join(struct node *left, struct node *right);
+struct node *join(struct node *left, struct node *right);
+
+/**
+ * Computes the ceiling of the log base 2 of the input
+ * @see https://stackoverflow.com/a/15327567/6485996
+ */
+int ceil_log2(unsigned long long x);
 
 #endif //FIBONACCI_HEAP_NODE_H

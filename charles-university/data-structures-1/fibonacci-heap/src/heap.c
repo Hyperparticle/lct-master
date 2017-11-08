@@ -46,31 +46,14 @@ static void heap_disconnect(struct heap *heap, struct node *node);
 //    } while (next != fib_heap.root);
 //}
 
-/**
- * Allocates space for a blank node and returns it.
- * @return A node with the given key and pointers set to NULL.
- */
-static struct node *init_node(int element, int key);
-
 void reset(int capacity) {
-    if (fib_heap.node_buffer != NULL) {
-        for (int i = 0; i < fib_heap.node_buffer_i; i++) {
-            free(fib_heap.node_buffer[fib_heap.node_buffer_i]);
-        }
-
-        free(fib_heap.node_buffer);
-    }
+    node_free(fib_heap.root);
+    fib_heap.root = NULL;
 
     if (fib_heap.join_buffer != NULL) {
         free(fib_heap.join_buffer);
     }
-
-    fib_heap.root = NULL;
     fib_heap.capacity = capacity;
-    fib_heap.r_capacity = fib_heap.capacity = capacity;
-
-    fib_heap.node_buffer = malloc(capacity * sizeof(struct node *));
-    fib_heap.node_buffer_i = 0;
 
     fib_heap.node_count = 0;
     fib_heap.join_buffer_size = ceil_log2((unsigned) capacity);
@@ -78,7 +61,7 @@ void reset(int capacity) {
 }
 
 void insert(int element, int key) {
-    struct node *node = init_node(element, key);
+    struct node *node = node_init(element, key);
     heap_insert(&fib_heap, node);
 }
 
@@ -108,26 +91,6 @@ void delete_min(int *steps) {
 
 void decrease_key(int element, int key, bool naive) {
 
-}
-
-static struct node *init_node(int element, int key) {
-    if (fib_heap.node_buffer_i >= fib_heap.r_capacity) {
-        fib_heap.r_capacity *= 2;
-        fib_heap.node_buffer = realloc(fib_heap.node_buffer, fib_heap.r_capacity * sizeof(struct node *));
-    }
-
-    struct node *node = fib_heap.node_buffer[fib_heap.node_buffer_i] = malloc(sizeof(struct node));
-//    struct node *node = malloc(sizeof(struct node));
-    node->left = node->right = node->parent = node->child = NULL;
-    node->child_count = 0;
-    node->marked = false;
-
-    node->element = element;
-    node->key = key;
-
-    fib_heap.node_buffer_i++;
-
-    return node;
 }
 
 static void heap_insert(struct heap *heap, struct node *node) {
@@ -162,8 +125,9 @@ static void heap_disconnect(struct heap *heap, struct node *node) {
         heap->root = node->right;
     }
 
-    node->left = node->right = node->parent = node->child = NULL;
-    node->marked = false;
+    free(node);
+//    node->left = node->right = node->parent = node->child = NULL;
+//    node->marked = false;
 }
 
 static void heap_consolidate(struct heap *heap, int *steps) {

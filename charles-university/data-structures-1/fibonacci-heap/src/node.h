@@ -17,6 +17,14 @@ struct node {
     bool marked;
 };
 
+/**
+ * Allocates space for a blank node and returns it.
+ * @return A node with the given key and pointers set to NULL.
+ */
+struct node *node_init(int element, int key);
+
+void node_free(struct node *node);
+
 /** Merge two circular linked lists together */
 struct node *merge_list(struct node *list0, struct node *list1);
 

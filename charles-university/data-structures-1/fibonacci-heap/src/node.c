@@ -7,6 +7,35 @@
 #include <stdlib.h>
 #include "node.h"
 
+struct node *node_init(int element, int key) {
+    struct node *node = malloc(sizeof(struct node));
+    node->left = node->right = node->parent = node->child = NULL;
+    node->child_count = 0;
+    node->marked = false;
+
+    node->element = element;
+    node->key = key;
+
+    return node;
+}
+
+void node_free(struct node *node) {
+    if (node == NULL) {
+        return;
+    }
+
+    struct node *next = node;
+    next->left->right = NULL; // Unravel the linked list for termination
+
+    do {
+        struct node *right = next->right;
+        node_free(next->child);
+        next = right;
+    } while (next != NULL);
+
+    free(node);
+}
+
 struct node *merge_list(struct node *list0, struct node *list1) {
     if (list0 == NULL) { return list1; }
     if (list1 == NULL) { return list0; }

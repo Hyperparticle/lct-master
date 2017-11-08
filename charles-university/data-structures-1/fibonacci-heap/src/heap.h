@@ -13,8 +13,9 @@
 struct heap {
     struct node *root;        // The root of the heap (minimum element)
     int capacity;             // The maximum number of nodes in the heap
+    int r_capacity;
     int node_count;           // The number of nodes in the root of the heap
-    struct node *node_buffer; // A buffer containing all nodes
+    struct node **node_buffer; // A buffer containing all nodes
     int node_buffer_i;        // The number of nodes in the heap
     struct node **join_buffer; // Used to join heaps together in the consolidation phase
     int join_buffer_size;
@@ -24,9 +25,9 @@ struct heap {
 void reset(int capacity);
 
 /**  Inserts the given key and element */
-void insert(int element, int key, bool naive);
+void insert(int element, int key);
 
-void delete_min(bool naive, int *steps);
+void delete_min(int *steps);
 
 void decrease_key(int element, int key, bool naive);
 

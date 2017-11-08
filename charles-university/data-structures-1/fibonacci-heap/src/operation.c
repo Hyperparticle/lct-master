@@ -61,10 +61,10 @@ int do_operation(struct operation op, bool naive) {
             reset(op.element);
             break;
         case INSERT:
-            insert(op.element, op.key, naive);
+            insert(op.element, op.key);
             break;
         case DELETE_MIN:
-            delete_min(naive, &steps);
+            delete_min(&steps);
             break;
         case DECREASE_KEY:
             decrease_key(op.element, op.key, naive);

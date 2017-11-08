@@ -8,11 +8,43 @@
 #include <string.h>
 #include "heap.h"
 
-static struct heap fib_heap = { NULL, 0, 0, NULL, 0, NULL };
+static struct heap fib_heap = { NULL, 0, 0, 0, NULL, 0, NULL };
 
 static void heap_insert(struct heap *heap, struct node *node);
 static void heap_consolidate(struct heap *heap, int *steps);
 static void heap_disconnect(struct heap *heap, struct node *node);
+
+//static void print_dbg() {
+//    if (fib_heap.root == NULL) {
+//        return;
+//    }
+//
+//    struct node *next = fib_heap.root;
+//    struct node *last = next;
+//
+//    printf("[%d] ", fib_heap.node_count);
+//
+//    do {
+//        printf("%d (%d), ", next->key, next->child_count);
+//        next = next->right;
+//    } while (next != last);
+//    printf("\n");
+//}
+
+//static void check_heap() {
+//    memset(fib_heap.join_buffer, 0, fib_heap.join_buffer_size * sizeof(struct node *));
+//    struct node *next = fib_heap.root;
+//
+//    do {
+//        if (fib_heap.join_buffer[next->child_count] != NULL) {
+//            struct node *i = fib_heap.join_buffer[next->child_count];
+//            fprintf(stderr, "Multiple trees of the same order! (%d)\n", next->child_count);
+//        }
+//
+//        fib_heap.join_buffer[next->child_count] = next;
+//        next = next->right;
+//    } while (next != fib_heap.root);
+//}
 
 /**
  * Allocates space for a blank node and returns it.
@@ -22,6 +54,10 @@ static struct node *init_node(int element, int key);
 
 void reset(int capacity) {
     if (fib_heap.node_buffer != NULL) {
+        for (int i = 0; i < fib_heap.node_buffer_i; i++) {
+            free(fib_heap.node_buffer[fib_heap.node_buffer_i]);
+        }
+
         free(fib_heap.node_buffer);
     }
 
@@ -31,20 +67,22 @@ void reset(int capacity) {
 
     fib_heap.root = NULL;
     fib_heap.capacity = capacity;
+    fib_heap.r_capacity = fib_heap.capacity = capacity;
 
-    fib_heap.node_buffer = malloc(capacity * sizeof(struct node));
+    fib_heap.node_buffer = malloc(capacity * sizeof(struct node *));
     fib_heap.node_buffer_i = 0;
 
+    fib_heap.node_count = 0;
     fib_heap.join_buffer_size = ceil_log2((unsigned) capacity);
     fib_heap.join_buffer = malloc(fib_heap.join_buffer_size * sizeof(struct node *));
 }
 
-void insert(int element, int key, bool naive) {
+void insert(int element, int key) {
     struct node *node = init_node(element, key);
     heap_insert(&fib_heap, node);
 }
 
-void delete_min(bool naive, int *steps) {
+void delete_min(int *steps) {
     struct node *min = fib_heap.root;
     struct node *child = min->child;
 
@@ -73,15 +111,17 @@ void decrease_key(int element, int key, bool naive) {
 }
 
 static struct node *init_node(int element, int key) {
-    if (fib_heap.node_buffer_i >= fib_heap.capacity) {
-        fprintf(stderr, "Heap capacity exceeded! (%d)\n", fib_heap.capacity);
-        exit(EXIT_FAILURE);
+    if (fib_heap.node_buffer_i >= fib_heap.r_capacity) {
+        fib_heap.r_capacity *= 2;
+        fib_heap.node_buffer = realloc(fib_heap.node_buffer, fib_heap.r_capacity * sizeof(struct node *));
     }
 
-    struct node *node = &fib_heap.node_buffer[fib_heap.node_buffer_i];
+    struct node *node = fib_heap.node_buffer[fib_heap.node_buffer_i] = malloc(sizeof(struct node));
+//    struct node *node = malloc(sizeof(struct node));
     node->left = node->right = node->parent = node->child = NULL;
-    node->child = 0;
+    node->child_count = 0;
     node->marked = false;
+
     node->element = element;
     node->key = key;
 
@@ -125,34 +165,6 @@ static void heap_disconnect(struct heap *heap, struct node *node) {
     node->left = node->right = node->parent = node->child = NULL;
     node->marked = false;
 }
-
-//static void print() {
-//    struct node *next = fib_heap.root;
-//    struct node *last = next;
-//
-//    printf("[%d] ", fib_heap.node_count);
-//
-//    do {
-//        printf("%d (%d), ", next->key, next->child_count);
-//        next = next->right;
-//    } while (next != last);
-//    printf("\n");
-//}
-
-//static void check_heap() {
-//    memset(fib_heap.join_buffer, 0, fib_heap.join_buffer_size * sizeof(struct node *));
-//    struct node *next = fib_heap.root;
-//
-//    do {
-//        if (fib_heap.join_buffer[next->child_count] != NULL) {
-//            struct node *i = fib_heap.join_buffer[next->child_count];
-//            fprintf(stderr, "Multiple trees of the same order! (%d)\n", next->child_count);
-//        }
-//
-//        fib_heap.join_buffer[next->child_count] = next;
-//        next = next->right;
-//    } while (next != fib_heap.root);
-//}
 
 static void heap_consolidate(struct heap *heap, int *steps) {
     if (heap->root == NULL) {

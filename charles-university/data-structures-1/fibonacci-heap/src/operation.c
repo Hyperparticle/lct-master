@@ -67,7 +67,7 @@ int do_operation(struct operation op, bool naive) {
             delete_min(naive, &steps);
             break;
         case DECREASE_KEY:
-            decrease_key(op.element, op.key, naive, &steps);
+            decrease_key(op.element, op.key, naive);
             break;
         default:
             break;

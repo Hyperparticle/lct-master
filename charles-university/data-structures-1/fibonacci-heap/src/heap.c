@@ -8,10 +8,10 @@
 #include <string.h>
 #include "heap.h"
 
-static struct heap fib_heap = { NULL, 0, NULL, 0, NULL };
+static struct heap fib_heap = { NULL, 0, 0, NULL, 0, NULL };
 
 static void heap_insert(struct heap *heap, struct node *node);
-static void heap_consolidate(struct heap *heap);
+static void heap_consolidate(struct heap *heap, int *steps);
 static void heap_disconnect(struct heap *heap, struct node *node);
 
 /**
@@ -48,11 +48,14 @@ void delete_min(bool naive, int *steps) {
     struct node *min = fib_heap.root;
     struct node *child = min->child;
 
+    *steps += min->child_count;
+    fib_heap.node_count += min->child_count - 1;
+
     heap_disconnect(&fib_heap, min);
 
     // Remove parent pointers for all children
     if (child != NULL) {
-        struct node *next = child->right;
+        struct node *next = child;
         do {
             next->parent = NULL;
             next->marked = false;
@@ -62,25 +65,10 @@ void delete_min(bool naive, int *steps) {
 
     fib_heap.root = merge_list(fib_heap.root, child);
 
-    heap_consolidate(&fib_heap);
-
-    memset(fib_heap.join_buffer, 0, fib_heap.join_buffer_size * sizeof(struct node *));
-    struct node *next = fib_heap.root->right;
-
-    do {
-        if (fib_heap.join_buffer[next->child_count] != NULL) {
-            struct node *i = fib_heap.join_buffer[next->child_count];
-            fprintf(stderr, "Multiple trees of the same order! (%d)\n", next->child_count);
-            heap_consolidate(&fib_heap);
-        }
-        fib_heap.join_buffer[next->child_count] = next;
-        next = next->right;
-    } while (next != fib_heap.root);
-
-
+    heap_consolidate(&fib_heap, steps);
 }
 
-void decrease_key(int element, int key, bool naive, int *steps) {
+void decrease_key(int element, int key, bool naive) {
 
 }
 
@@ -121,6 +109,8 @@ static void heap_insert(struct heap *heap, struct node *node) {
             heap->root = node;
         }
     }
+
+    heap->node_count++;
 }
 
 static void heap_disconnect(struct heap *heap, struct node *node) {
@@ -136,7 +126,35 @@ static void heap_disconnect(struct heap *heap, struct node *node) {
     node->marked = false;
 }
 
-static void heap_consolidate(struct heap *heap) {
+//static void print() {
+//    struct node *next = fib_heap.root;
+//    struct node *last = next;
+//
+//    printf("[%d] ", fib_heap.node_count);
+//
+//    do {
+//        printf("%d (%d), ", next->key, next->child_count);
+//        next = next->right;
+//    } while (next != last);
+//    printf("\n");
+//}
+
+//static void check_heap() {
+//    memset(fib_heap.join_buffer, 0, fib_heap.join_buffer_size * sizeof(struct node *));
+//    struct node *next = fib_heap.root;
+//
+//    do {
+//        if (fib_heap.join_buffer[next->child_count] != NULL) {
+//            struct node *i = fib_heap.join_buffer[next->child_count];
+//            fprintf(stderr, "Multiple trees of the same order! (%d)\n", next->child_count);
+//        }
+//
+//        fib_heap.join_buffer[next->child_count] = next;
+//        next = next->right;
+//    } while (next != fib_heap.root);
+//}
+
+static void heap_consolidate(struct heap *heap, int *steps) {
     if (heap->root == NULL) {
         return;
     }
@@ -146,36 +164,46 @@ static void heap_consolidate(struct heap *heap) {
 
     // Join all heaps with the same order
     struct node *next = heap->root;
-    struct node *last = next;
 
+    bool joining;
     do {
-        int order = next->child_count;
+        joining = false;
 
-        struct node *joined = next;
-        heap->root = next = next->right;
+        int count = heap->node_count;
+        for (int i = 0; i < count; i++) {
+            int order = next->child_count;
 
-        while (heap->join_buffer[order] != NULL) {
-            if (order >= heap->join_buffer_size) {
-                fprintf(stderr, "Order greater than join buffer size (%d)\n", order);
-                exit(EXIT_FAILURE);
+            while (heap->join_buffer[order] != NULL) {
+                if (order >= heap->join_buffer_size) {
+                    fprintf(stderr, "Order greater than join buffer size (%d)\n", order);
+                    exit(EXIT_FAILURE);
+                }
+
+                struct node *join_with = heap->join_buffer[order];
+
+                if (join_with == next) {
+                    break;
+                }
+
+                next = join(next, join_with);
+                joining = true;
+                heap->root = next;
+                heap->node_count--;
+                steps++;
+
+                heap->join_buffer[order] = NULL;
+                order++;
             }
 
-            struct node *join_with = heap->join_buffer[order];
-//            if (joined == join_with) {
-//                break;
-//            }
+            heap->join_buffer[order] = next;
 
-            joined = join(joined, join_with);
-            heap->join_buffer[order] = NULL;
-            order++;
+            next = next->right;
         }
-
-        heap->join_buffer[order] = joined;
-    } while (next != last);
+    } while (joining);
 
     // Find the minimum
     next = heap->root;
-    last = next->left;
+    struct node *last = next;
 
     do {
         heap->root = next->key < heap->root->key ? next : heap->root;

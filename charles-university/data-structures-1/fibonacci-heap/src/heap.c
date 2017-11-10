@@ -7,8 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "heap.h"
+#include "debug.h"
 
-static struct heap fib_heap = { NULL, 0, 0, 0, NULL, 0, NULL };
+static struct heap fib_heap = { NULL, 0, 0, NULL, NULL, 0 };
 
 static void heap_insert(struct heap *heap, struct node *node);
 static void heap_consolidate(struct heap *heap, int *steps);
@@ -23,13 +24,17 @@ void reset(int capacity) {
     }
     fib_heap.capacity = capacity;
 
-    fib_heap.node_count = 0;
+    fib_heap.root_list_count = 0;
+
+    fib_heap.node_buffer = calloc((size_t) capacity, sizeof(struct node *));
+
     fib_heap.join_buffer_size = ceil_log2((unsigned) capacity);
-    fib_heap.join_buffer = malloc(fib_heap.join_buffer_size * sizeof(struct node *));
+    fib_heap.join_buffer = calloc((size_t) fib_heap.join_buffer_size, sizeof(struct node *));
 }
 
 void insert(int element, int key) {
     struct node *node = node_init(element, key);
+    fib_heap.node_buffer[element] = node;
     heap_insert(&fib_heap, node);
 }
 
@@ -37,10 +42,10 @@ void delete_min(int *steps) {
     struct node *min = fib_heap.root;
     struct node *child = min->child;
 
-    heap_disconnect(&fib_heap, min);
-
     *steps += min->child_count;
-    fib_heap.node_count += min->child_count - 1;
+    fib_heap.root_list_count += min->child_count - 1;
+
+    heap_disconnect(&fib_heap, min);
 
     // Remove parent pointers for all children
     if (child != NULL) {
@@ -52,13 +57,50 @@ void delete_min(int *steps) {
         } while (next != child);
     }
 
+
     fib_heap.root = merge_list(fib_heap.root, child);
 
     heap_consolidate(&fib_heap, steps);
 }
 
 void decrease_key(int element, int key, bool naive) {
+    struct node *node = fib_heap.node_buffer[element];
 
+    if (node == NULL) {
+        return;
+    }
+
+    // Ignore if new key is greater than current
+    if (key > node->key) {
+        return;
+    }
+
+    node->key = key;
+
+    if (node->parent != NULL && node->parent->key > key) {
+        // Not a valid heap anymore, need to cut
+        if (node == node->right) {
+            node->parent->child = NULL;
+        } else {
+            node->left->right = node->right;
+            node->right->left = node->left;
+            node->parent->child = node->right;
+        }
+
+        node->parent->child_count--;
+
+        if (node->parent->marked) {
+            // Cascading cut
+            decrease_key(node->parent->element, node->parent->key, naive);
+        } else {
+            node->parent->marked = true;
+        }
+
+        heap_insert(&fib_heap, node);
+    } else if (node->key < fib_heap.root->key) {
+        // Node is the new minimum
+        fib_heap.root = node;
+    }
 }
 
 static void heap_insert(struct heap *heap, struct node *node) {
@@ -81,7 +123,7 @@ static void heap_insert(struct heap *heap, struct node *node) {
         }
     }
 
-    heap->node_count++;
+    heap->root_list_count++;
 }
 
 static void heap_disconnect(struct heap *heap, struct node *node) {
@@ -93,6 +135,7 @@ static void heap_disconnect(struct heap *heap, struct node *node) {
         node->right->left = node->left;
     }
 
+    fib_heap.node_buffer[node->element] = NULL;
     free(node);
 }
 
@@ -111,12 +154,13 @@ static void heap_consolidate(struct heap *heap, int *steps) {
     do {
         joining = false;
 
-        int count = heap->node_count;
+        int count = heap->root_list_count;
         for (int i = 0; i < count; i++) {
             int order = next->child_count;
 
             while (heap->join_buffer[order] != NULL) {
                 if (order >= heap->join_buffer_size) {
+                    print_heap(heap);
                     fprintf(stderr, "Order greater than join buffer size (%d)\n", order);
                     exit(EXIT_FAILURE);
                 }
@@ -128,9 +172,10 @@ static void heap_consolidate(struct heap *heap, int *steps) {
                 }
 
                 next = join(next, join_with);
+                print_heap(heap);
                 joining = true;
                 heap->root = next;
-                heap->node_count--;
+                heap->root_list_count--;
                 steps++;
 
                 heap->join_buffer[order] = NULL;
@@ -143,59 +188,6 @@ static void heap_consolidate(struct heap *heap, int *steps) {
     } while (joining);
 
     heap->root = find_min(heap->root);
-}
 
-//static void heap_consolidate(struct heap *heap, int *steps) {
-//    if (heap->root == NULL) {
-//        return;
-//    }
-//
-//    // Reset the join buffer
-//    memset(heap->join_buffer, 0, heap->join_buffer_size * sizeof(struct node *));
-//
-//    // Join all heaps with the same order
-////    print_dbg();
-//    struct node *next = heap->root;
-//    struct node *last = next;
-//
-////    bool joining;
-////    do {
-////        joining = false;
-//
-//    int count = heap->node_count;
-//    for (int i = 0; i < count; i++) {
-//        struct node *current = next;
-//        next = next->right;
-//
-//        int order = current->child_count;
-//
-//        struct node *joined = current;
-//        while (heap->join_buffer[order] != NULL) {
-//            if (order >= heap->join_buffer_size) {
-//                fprintf(stderr, "Order greater than join buffer size (%d)\n", order);
-//                exit(EXIT_FAILURE);
-//            }
-//
-//            struct node *join_with = heap->join_buffer[order];
-//
-//            if (current == join_with) {
-//                break;
-//            }
-//
-//            joined = join(current, join_with);
-////                joining = true;
-//            heap->node_count--;
-//            heap->root = joined;
-//            steps++;
-//
-//            heap->join_buffer[order] = NULL;
-//            order++;
-//        }
-//
-//        heap->join_buffer[order] = joined;
-//    }
-////    } while (joining);
-//
-//    heap->root = find_min(heap->root);
-//    print_dbg();
-//}
+    check_heap(&fib_heap);
+}

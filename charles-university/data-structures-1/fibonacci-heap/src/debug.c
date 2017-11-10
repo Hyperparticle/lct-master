@@ -42,6 +42,30 @@ void print_heap(struct heap *heap) {
     printf("\n");
 }
 
+static int check_children(struct node *node) {
+    if (node == NULL) {
+        return 0;
+    }
+
+    int count = 0;
+    struct node *next = node;
+    do {
+        if (next->child != NULL) {
+            int children = check_children(next->child);
+            if (children != next->child_count) {
+                printf("Child count discrepancy\n");
+            }
+        } else if (next->child_count != 0) {
+            printf("Child count discrepancy\n");
+        }
+
+        count++;
+        next = next->right;
+    } while (next != node);
+
+    return count;
+}
+
 void check_heap(struct heap *heap) {
     if (heap->root == NULL) {
         return;
@@ -67,4 +91,6 @@ void check_heap(struct heap *heap) {
         print_heap(heap);
         printf("Root list count discrepancy (%d, %d)\n", heap->root_list_count, count);
     }
+
+//    check_children(heap->root);
 }

@@ -8,6 +8,7 @@
 
 #include "heap.h"
 
+void print_join_buffer(struct heap *heap);
 void print_heap(struct heap *heap);
 void check_heap(struct heap *heap);
 

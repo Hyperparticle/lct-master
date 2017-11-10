@@ -77,6 +77,18 @@ struct node *join(struct node *left, struct node *right) {
     return left;
 }
 
+struct node *find_min(struct node *min) {
+    struct node *next = min;
+    struct node *last = next;
+
+    do {
+        min = next->key < min->key ? next : min;
+        next = next->right;
+    } while (next != last);
+
+    return min;
+}
+
 int ceil_log2(unsigned long long x) {
     static const unsigned long long t[6] = {
             0xFFFFFFFF00000000ull,

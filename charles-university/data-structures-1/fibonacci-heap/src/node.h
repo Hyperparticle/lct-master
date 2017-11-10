@@ -30,6 +30,8 @@ struct node *merge_list(struct node *list0, struct node *list1);
 
 struct node *join(struct node *left, struct node *right);
 
+struct node *find_min(struct node *node);
+
 /**
  * Computes the ceiling of the log base 2 of the input
  * @see https://stackoverflow.com/a/15327567/6485996

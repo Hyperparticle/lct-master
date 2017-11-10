@@ -14,38 +14,6 @@ static void heap_insert(struct heap *heap, struct node *node);
 static void heap_consolidate(struct heap *heap, int *steps);
 static void heap_disconnect(struct heap *heap, struct node *node);
 
-//static void print_dbg() {
-//    if (fib_heap.root == NULL) {
-//        return;
-//    }
-//
-//    struct node *next = fib_heap.root;
-//    struct node *last = next;
-//
-//    printf("[%d] ", fib_heap.node_count);
-//
-//    do {
-//        printf("%d (%d), ", next->key, next->child_count);
-//        next = next->right;
-//    } while (next != last);
-//    printf("\n");
-//}
-
-//static void check_heap() {
-//    memset(fib_heap.join_buffer, 0, fib_heap.join_buffer_size * sizeof(struct node *));
-//    struct node *next = fib_heap.root;
-//
-//    do {
-//        if (fib_heap.join_buffer[next->child_count] != NULL) {
-//            struct node *i = fib_heap.join_buffer[next->child_count];
-//            fprintf(stderr, "Multiple trees of the same order! (%d)\n", next->child_count);
-//        }
-//
-//        fib_heap.join_buffer[next->child_count] = next;
-//        next = next->right;
-//    } while (next != fib_heap.root);
-//}
-
 void reset(int capacity) {
     node_free(fib_heap.root);
     fib_heap.root = NULL;
@@ -69,10 +37,10 @@ void delete_min(int *steps) {
     struct node *min = fib_heap.root;
     struct node *child = min->child;
 
+    heap_disconnect(&fib_heap, min);
+
     *steps += min->child_count;
     fib_heap.node_count += min->child_count - 1;
-
-    heap_disconnect(&fib_heap, min);
 
     // Remove parent pointers for all children
     if (child != NULL) {
@@ -120,14 +88,12 @@ static void heap_disconnect(struct heap *heap, struct node *node) {
     if (node->right == node) {
         heap->root = NULL;
     } else {
+        heap->root = node->right;
         node->left->right = node->right;
         node->right->left = node->left;
-        heap->root = node->right;
     }
 
     free(node);
-//    node->left = node->right = node->parent = node->child = NULL;
-//    node->marked = false;
 }
 
 static void heap_consolidate(struct heap *heap, int *steps) {
@@ -172,17 +138,64 @@ static void heap_consolidate(struct heap *heap, int *steps) {
             }
 
             heap->join_buffer[order] = next;
-
             next = next->right;
         }
     } while (joining);
 
-    // Find the minimum
-    next = heap->root;
-    struct node *last = next;
-
-    do {
-        heap->root = next->key < heap->root->key ? next : heap->root;
-        next = next->right;
-    } while (next != last);
+    heap->root = find_min(heap->root);
 }
+
+//static void heap_consolidate(struct heap *heap, int *steps) {
+//    if (heap->root == NULL) {
+//        return;
+//    }
+//
+//    // Reset the join buffer
+//    memset(heap->join_buffer, 0, heap->join_buffer_size * sizeof(struct node *));
+//
+//    // Join all heaps with the same order
+////    print_dbg();
+//    struct node *next = heap->root;
+//    struct node *last = next;
+//
+////    bool joining;
+////    do {
+////        joining = false;
+//
+//    int count = heap->node_count;
+//    for (int i = 0; i < count; i++) {
+//        struct node *current = next;
+//        next = next->right;
+//
+//        int order = current->child_count;
+//
+//        struct node *joined = current;
+//        while (heap->join_buffer[order] != NULL) {
+//            if (order >= heap->join_buffer_size) {
+//                fprintf(stderr, "Order greater than join buffer size (%d)\n", order);
+//                exit(EXIT_FAILURE);
+//            }
+//
+//            struct node *join_with = heap->join_buffer[order];
+//
+//            if (current == join_with) {
+//                break;
+//            }
+//
+//            joined = join(current, join_with);
+////                joining = true;
+//            heap->node_count--;
+//            heap->root = joined;
+//            steps++;
+//
+//            heap->join_buffer[order] = NULL;
+//            order++;
+//        }
+//
+//        heap->join_buffer[order] = joined;
+//    }
+////    } while (joining);
+//
+//    heap->root = find_min(heap->root);
+//    print_dbg();
+//}

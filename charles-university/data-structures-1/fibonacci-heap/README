@@ -1,0 +1,35 @@
+# Fibonacci Heap
+
+The following program implements a Fibonacci Heap for analyzing its algorithmic complexity.
+
+- Homework 1 Specification - https://kam.mff.cuni.cz/~ds1/hw/2-fibheap/problem.html)
+- Basic Rules - https://kam.mff.cuni.cz/~ds1/hw/rules.html
+
+## Project Structure
+
+- heapgen.cpp   -
+- fibheap.c     -
+- heap.c/h      -
+- node.c/h      -
+- operation.c/h -
+
+## Building and Running
+
+Prerequisites:
+- gcc/g++
+- make
+
+To Build:
+
+$ make
+
+Run all tests with:
+
+$ bash ./fibheaptest.sh
+
+
+To Clean:
+
+```bash
+make clean
+```

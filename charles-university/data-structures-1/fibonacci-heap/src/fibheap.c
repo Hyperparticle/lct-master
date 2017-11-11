@@ -13,7 +13,7 @@
  * Reads line by line from the input stream performing the
  * specified operations, and prints path length statistics.
  */
-static void read_input(FILE *stream);
+static void read_input(FILE *stream, bool naive);
 
 /**
  *
@@ -30,18 +30,23 @@ static bool naive = false;
 int main(int argc, char **argv) {
     FILE *stream = stdin;
 
-    if (argc == 2) {
-        stream = fopen(argv[1], "r");
-    } else if (argc > 2) {
+    if (argc >= 2) {
+//        stream = fopen(argv[1], "r");
+        stream = popen(argv[1], "r");
+    }
+
+    if (argc >= 3 && strcmp(argv[2], "-n") == 0) {
+        naive = true;
+    } else if (argc >= 3) {
         print_usage();
     }
 
-    read_input(stream);
+    read_input(stream, naive);
 
     return 0;
 }
 
-static void read_input(FILE *stream) {
+static void read_input(FILE *stream, bool naive) {
     const size_t line_size = 200;
     char line[line_size];
 
@@ -54,6 +59,7 @@ static void read_input(FILE *stream) {
     // Read line by line
     // Perform each operation and print statistics
     while (fgets(line, line_size, stream) != NULL)  {
+//        printf("\n%s", line);
         op = parse_operation(line);
 
         int value = do_operation(op, naive);
@@ -86,7 +92,9 @@ void print_average(unsigned long step_sum, unsigned long step_count, int heap_si
 }
 
 static void print_usage() {
-    fprintf(stderr, "Usage: fibheap\n");
-    fprintf(stderr, "Reads output of heapgen (stdin)\n");
+    fprintf(stderr, "Usage: fibheap [filename] [-n]\n");
+    fprintf(stderr, "Reads output of heapgen (stdin or from a file)\n");
+    fprintf(stderr, "\tfilename (optional) - file path for input\n");
+    fprintf(stderr, "\t-n (optional)       - use naive implementation\n");
     exit(EXIT_FAILURE);
 }

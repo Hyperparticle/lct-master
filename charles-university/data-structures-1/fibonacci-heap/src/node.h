@@ -13,7 +13,7 @@ struct node {
     struct node *left, *right, *parent, *child;
     int element;
     int key;
-    int child_count;
+    unsigned int degree;
     bool marked;
 };
 
@@ -33,9 +33,9 @@ struct node *join(struct node *left, struct node *right);
 struct node *find_min(struct node *node);
 
 /**
- * Computes the ceiling of the log base 2 of the input
- * @see https://stackoverflow.com/a/15327567/6485996
+ * Computes the floor of the log base 2 of the input
+ * @see Bit Twiddling Hacks: http://graphics.stanford.edu/~seander/bithacks.html#IntegerLog
  */
-int ceil_log2(unsigned long long x);
+unsigned int floor_log2(unsigned int x);
 
 #endif //FIBONACCI_HEAP_NODE_H

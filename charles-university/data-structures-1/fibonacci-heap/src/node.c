@@ -5,12 +5,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "node.h"
 
 struct node *node_init(int element, int key) {
     struct node *node = malloc(sizeof(struct node));
     node->left = node->right = node->parent = node->child = NULL;
-    node->child_count = 0;
+    node->degree = 0;
     node->marked = false;
 
     node->element = element;
@@ -72,7 +73,7 @@ struct node *join(struct node *left, struct node *right) {
 
     right->parent = left;
     left->child = right;
-    left->child_count++;
+    left->degree++;
 
     return left;
 }
@@ -89,26 +90,17 @@ struct node *find_min(struct node *min) {
     return min;
 }
 
-int ceil_log2(unsigned long long x) {
-    static const unsigned long long t[6] = {
-            0xFFFFFFFF00000000ull,
-            0x00000000FFFF0000ull,
-            0x000000000000FF00ull,
-            0x00000000000000F0ull,
-            0x000000000000000Cull,
-            0x0000000000000002ull
+unsigned int floor_log2(unsigned int v) {
+    static const int MultiplyDeBruijnBitPosition[32] = {
+        0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30,
+        8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31
     };
 
-    int y = (((x & (x - 1)) == 0) ? 0 : 1);
-    int j = 32;
-    int i;
+    v |= v >> 1; // first round down to one less than a power of 2
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
 
-    for (i = 0; i < 6; i++) {
-        int k = (((x & t[i]) == 0) ? 0 : j);
-        y += k;
-        x >>= k;
-        j >>= 1;
-    }
-
-    return y;
+    return MultiplyDeBruijnBitPosition[(v * 0x07C4ACDDU) >> 27];
 }

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <math.h>
 
@@ -16,13 +17,53 @@
 #define NAIVE_MIN (1)
 #define NAIVE_DIF (1)
 
+typedef unsigned long uint64_t;
+typedef unsigned int uint32_t;
+
+/*
+ * This is the xoroshiro128+ random generator, designed in 2016 by David Blackman
+ * and Sebastiano Vigna, distributed under the CC-0 license. For more details,
+ * see http://vigna.di.unimi.it/xorshift/.
+ */
+static uint64_t rng_state[2];
+
+static uint64_t rng_rotl(const uint64_t x, int k)
+{
+	return (x << k) | (x >> (64 - k));
+}
+
+static uint64_t rng_next_u64(void)
+{
+	uint64_t s0 = rng_state[0], s1 = rng_state[1];
+	uint64_t result = s0 + s1;
+	s1 ^= s0;
+	rng_state[0] = rng_rotl(s0, 55) ^ s1 ^ (s1 << 14);
+	rng_state[1] = rng_rotl(s1, 36);
+	return result;
+}
+
+static uint32_t rng_next_u32(void)
+{
+	return rng_next_u64() >> 11;
+}
+
+static void rng_setup(unsigned int seed)
+{
+	rng_state[0] = seed * 0xdeadbeef;
+	rng_state[1] = seed ^ 0xc0de1234;
+	for (int i=0; i<100; i++)
+		rng_next_u64();
+}
+
+/*** The RNG ends here ***/
+
 static void usage(void)
 {
 	fprintf(stderr, "Usage: heapgen [-s <student-id>] [-r] [-b] [-x]\n");
 	exit(1);
 }
 
-/* Consolidate into one heap with high order and restore the heap structure after that */
+/* Consolidate into one tree with high order and restore the heap structure after that */
 static void expensive_loop(int loops)
 {
 	for (int i=0; i<loops; i++) {
@@ -91,37 +132,42 @@ static void ncascade_gen_mod(void)
 static void random_gen(int bias)
 {
 	int *a = new int[MAX_LEN+1];
-	int next, op, j, nr_del, nr_dec;
+	int next, op, j, nr_del, nr_dec, num_elts;
 
 	for (int length = MIN_LEN; length <= MAX_LEN; length += DIF_LEN) {
 		for (int i=0; i<length; i++) // Initialize some random elements to insert
-			a[i] = ((int) rand()) % length;
+			a[i] = rng_next_u32() % length;
 
 		printf("# %d\n",length);
 		next = 0; // Next element to insert
 		nr_del = floor(length/(bias+1.6));
 		nr_dec = floor(2*length+5.2*nr_del);
 
-		while (next < 10){ // Insert the first few elements to have something to work with
+		while (next < 10) { // Insert the first few elements to have something to work with
 			printf("INS %d %d\n", next, a[next]);
 			next++;
 		}
+		num_elts = next;
 
 		while (next < length) {
-			op = ((int) rand()) % (length+nr_dec+nr_del); // Choose an operation at random
+			op = rng_next_u32() % (length+nr_dec+nr_del); // Choose an operation at random
 
 			if (op < length) { // Insert the next element
 				printf("INS %d %d\n", next, a[next]);
 				next++;
+				num_elts++;
 			} else if (op < length+nr_dec) { // Decrease the key of some element
-				j = ((int) rand()) % next;
+				j = rng_next_u32() % next;
 				if (a[j] > 0) { // Key of element can be decreased
-					a[j] -= (((int) rand()) % next) + 1; // Subtract some positive number
+					a[j] -= (rng_next_u32() % next) + 1; // Subtract some positive number
 					if (a[j] < 0) a[j]=0;
 					printf("DEC %d %d\n", j, a[j]);
 				}
 			} else { // Delete the minimum
-				printf("DEL\n");
+				if (num_elts) {
+					printf("DEL\n");
+					num_elts--;
+				}
 			}
 		}
 	}
@@ -154,7 +200,7 @@ int main(int argc, char* argv[])
 		usage();
 	}
 
-	srand(student_id);
+	rng_setup(student_id);
 
 	if (few_del_min) random_gen(BIAS);
 	else if (cascade) ncascade_gen_mod();

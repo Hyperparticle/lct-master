@@ -1,11 +1,12 @@
 /**
+ * Defines low-level node operations on heap nodes (init, free, merge, join, find_min)
+ *
  * @date 11/04/17
  * @author Dan Kondratyuk
  */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include "node.h"
 
 struct node *node_init(int element, int key) {
@@ -52,17 +53,18 @@ struct node *merge_list(struct node *list0, struct node *list1) {
     return list0;
 }
 
-struct node *join(struct node *left, struct node *right) {
+struct node *node_join(struct node *left, struct node *right) {
     if (left == right) {
         fprintf(stderr, "Cannot join node with itself\n");
         exit(EXIT_FAILURE);
     }
 
+    // Ensure that the left node has a smaller key
     if (right->key < left->key) {
-        return join(right, left);
+        return node_join(right, left);
     }
 
-    // Detach right
+    // Detach right, merge with any children
     right->left->right = right->right;
     right->right->left = right->left;
     right->left = right->right = right;
@@ -91,7 +93,9 @@ struct node *find_min(struct node *min) {
 }
 
 unsigned int floor_log2(unsigned int v) {
-    static const int MultiplyDeBruijnBitPosition[32] = {
+    // Fast floor log base 2
+    // Bit Twiddling Hacks: http://graphics.stanford.edu/~seander/bithacks.html#IntegerLog
+    static const unsigned int MultiplyDeBruijnBitPosition[32] = {
         0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30,
         8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31
     };

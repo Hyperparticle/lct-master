@@ -1,4 +1,6 @@
 /**
+ * Defines all top-level heap operations (reset, insert, extract_min, decrease_key)
+ *
  * @date 11/04/17
  * @author Dan Kondratyuk
  */
@@ -7,12 +9,24 @@
 #include <stdlib.h>
 #include "heap.h"
 
-// The heap for
+// The global Fibonacci heap
 static struct heap fib_heap = { NULL, NULL, 0, 0, 0 };
 
+/**
+ * Inserts the given node into the heap
+ */
 static void heap_insert(struct heap *heap, struct node *node);
+
+/**
+ * Joins together all nodes of the same degree in the heap's root list
+ * @param steps - Adds steps to the number of steps the operation completed
+ */
 static void heap_consolidate(struct heap *heap, int *steps);
-static void heap_disconnect(struct heap *heap, struct node *node);
+
+/**
+ * Cuts the node from its parent and reinserts it into the heap
+ * @param naive - set to false to perform cascading cuts with marked nodes
+ */
 static void heap_cut(struct heap *heap, struct node *node, bool naive);
 
 void reset(unsigned int capacity) {
@@ -32,14 +46,25 @@ void insert(int element, int key) {
     heap_insert(&fib_heap, node);
 }
 
-void delete_min(int *steps) {
+int extract_min(int *steps) {
     struct node *min = fib_heap.root;
     struct node *child = min->child;
+    int element = min->element;
 
     *steps += min->degree;
     fib_heap.root_list_count += min->degree - 1;
 
-    heap_disconnect(&fib_heap, min);
+    // Disconnect the min node from the heap
+    if (min->right == min) {
+        fib_heap.root = NULL;
+    } else {
+        fib_heap.root = min->right;
+        min->left->right = min->right;
+        min->right->left = min->left;
+    }
+
+    fib_heap.node_buffer[min->element] = NULL;
+    free(min);
 
     // Remove parent pointers for all children
     if (child != NULL) {
@@ -51,10 +76,12 @@ void delete_min(int *steps) {
         } while (next != child);
     }
 
-
+    // Merge the children nodes with the root list
     fib_heap.root = merge_list(fib_heap.root, child);
 
     heap_consolidate(&fib_heap, steps);
+
+    return element;
 }
 
 void decrease_key(int element, int key, bool naive) {
@@ -87,14 +114,13 @@ static void heap_insert(struct heap *heap, struct node *node) {
     node->left = node->right = node;
 
     if (min == NULL) {
-        // Initial node
         heap->root = node;
         node->left = node->right = node;
     } else {
         merge_list(min, node);
 
+        // Update the minimum element
         if (node->key < min->key)  {
-            // Update the minimum element
             heap->root = node;
         }
     }
@@ -130,19 +156,6 @@ static void heap_cut(struct heap *heap, struct node *node, bool naive) {
     heap_insert(heap, node);
 }
 
-static void heap_disconnect(struct heap *heap, struct node *node) {
-    if (node->right == node) {
-        heap->root = NULL;
-    } else {
-        heap->root = node->right;
-        node->left->right = node->right;
-        node->right->left = node->left;
-    }
-
-    fib_heap.node_buffer[node->element] = NULL;
-    free(node);
-}
-
 static void heap_consolidate(struct heap *heap, int *steps) {
     if (heap->root == NULL) {
         return;
@@ -151,9 +164,11 @@ static void heap_consolidate(struct heap *heap, int *steps) {
     // Initialize a join buffer
     struct node **join_buffer = calloc(heap->max_degree + 1, sizeof(struct node *));
 
+
+    struct node *next = heap->root; // Start at the root
+    bool joining; // Termination condition
+
     // Join all heaps with the same order
-    struct node *next = heap->root;
-    bool joining;
     do {
         joining = false;
 
@@ -168,14 +183,15 @@ static void heap_consolidate(struct heap *heap, int *steps) {
                     break;
                 }
 
-                next = join(next, join_with);
-                joining = true;
+                next = node_join(next, join_with); // Join equal orders (degrees) together
                 heap->root = next;
-                heap->root_list_count--;
-                steps++;
 
                 join_buffer[order] = NULL;
+
+                heap->root_list_count--;
                 order++;
+                steps++;
+                joining = true;
             }
 
             if (order + 1 >= heap->max_degree) {
@@ -187,7 +203,7 @@ static void heap_consolidate(struct heap *heap, int *steps) {
         }
     } while (joining);
 
-    // Update the root the the minimum element in O(log n)
+    // Update the root by finding the minimum element in log(n) time
     heap->root = find_min(heap->root);
 
     free(join_buffer);

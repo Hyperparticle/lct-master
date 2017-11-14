@@ -1,4 +1,6 @@
 /**
+ * Converts strings from heapgen into structures
+ *
  * @date 11/04/17
  * @author Dan Kondratyuk
  */
@@ -8,7 +10,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "operation.h"
-#include "node.h"
 #include "heap.h"
 
 struct operation parse_operation(char *str) {
@@ -58,13 +59,13 @@ int do_operation(struct operation op, bool naive) {
 
     switch (op.type) {
         case RESET:
-            reset(op.element);
+            reset((unsigned) op.element);
             break;
         case INSERT:
             insert(op.element, op.key);
             break;
         case DELETE_MIN:
-            delete_min(&steps);
+            extract_min(&steps);
             break;
         case DECREASE_KEY:
             decrease_key(op.element, op.key, naive);

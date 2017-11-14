@@ -1,4 +1,6 @@
 /**
+ * Main starting point that reads input from stdin
+ *
  * @date 11/04/17
  * @author Dan Kondratyuk
  */
@@ -11,24 +13,25 @@
 
 /**
  * Reads line by line from the input stream performing the
- * specified operations, and prints path length statistics.
+ * specified operations, and prints statistics.
  */
 static void read_input(FILE *stream, bool naive);
 
 /**
- *
+ * Prints the average number of steps an ExtractMin operation takes given the
+ * total number of steps and the sum of all steps.
  */
-void print_average(unsigned long step_sum, unsigned long step_count, int heap_size);
+static void print_average(unsigned long step_sum, unsigned long step_count, int heap_size);
 
 /**
  * Prints how to use the program
  */
 static void print_usage();
 
-static bool naive = false;
-
 int main(int argc, char **argv) {
     FILE *stream = stdin;
+
+    bool naive = false;
 
     if (argc >= 2 && strcmp(argv[1], "-n") == 0) {
         naive = true;
@@ -49,14 +52,13 @@ static void read_input(FILE *stream, bool naive) {
     unsigned long step_sum = 0, step_count = 0;
 
     int heap_size = 0;
-    struct operation op;
 
     // Read line by line
     // Perform each operation and print statistics
     while (fgets(line, line_size, stream) != NULL)  {
-        op = parse_operation(line);
+        struct operation op = parse_operation(line);
 
-        int value = do_operation(op, naive);
+        int steps = do_operation(op, naive);
 
         switch (op.type) {
             case RESET:
@@ -65,8 +67,8 @@ static void read_input(FILE *stream, bool naive) {
                 heap_size = op.element;
                 break;
             case DELETE_MIN:
-                step_sum += value;
-                step_count += 1;
+                step_sum += steps;
+                step_count++;
                 break;
             case DECREASE_KEY:
                 break;
@@ -78,7 +80,7 @@ static void read_input(FILE *stream, bool naive) {
     print_average(step_sum, step_count, heap_size);
 }
 
-void print_average(unsigned long step_sum, unsigned long step_count, int heap_size) {
+static void print_average(unsigned long step_sum, unsigned long step_count, int heap_size) {
     if (step_count != 0) {
         double average = (double) step_sum / (double) step_count;
         printf("%d,%f\n", heap_size, average);

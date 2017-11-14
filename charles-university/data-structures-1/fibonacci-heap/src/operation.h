@@ -1,4 +1,6 @@
 /**
+ * Converts strings from heapgen into structures
+ *
  * @date 11/04/17
  * @author Dan Kondratyuk
  */

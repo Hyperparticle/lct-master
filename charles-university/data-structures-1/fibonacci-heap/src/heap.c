@@ -190,7 +190,7 @@ static void heap_consolidate(struct heap *heap, int *steps) {
 
                 heap->root_list_count--;
                 order++;
-                steps++;
+                *steps += 1;
                 joining = true;
             }
 

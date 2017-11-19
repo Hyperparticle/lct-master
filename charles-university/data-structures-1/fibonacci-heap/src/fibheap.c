@@ -33,11 +33,13 @@ int main(int argc, char **argv) {
 
     bool naive = false;
 
-    if (argc >= 2 && strcmp(argv[1], "-n") == 0) {
-        naive = true;
-    } else if (argc >= 3) {
-        print_usage();
-    }
+    stream = popen(argv[1], "r");
+
+//    if (argc >= 2 && strcmp(argv[1], "-n") == 0) {
+//        naive = true;
+//    } else if (argc >= 3) {
+//        print_usage();
+//    }
 
     read_input(stream, naive);
 
@@ -83,7 +85,7 @@ static void read_input(FILE *stream, bool naive) {
 static void print_average(unsigned long step_sum, unsigned long step_count, int heap_size) {
     if (step_count != 0) {
         double average = (double) step_sum / (double) step_count;
-        printf("%d,%f\n", heap_size, average);
+        printf("%d,%lu,%lu\n", heap_size, step_sum, step_count);
     }
 }
 

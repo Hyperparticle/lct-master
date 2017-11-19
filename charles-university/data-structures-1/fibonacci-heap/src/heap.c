@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "heap.h"
+#include "debug.h"
 
 // The global Fibonacci heap
 static struct heap fib_heap = { NULL, NULL, 0, 0, 0 };
@@ -47,6 +48,7 @@ void insert(int element, int key) {
 }
 
 int extract_min(int *steps) {
+    print_heap(&fib_heap);
     struct node *min = fib_heap.root;
     struct node *child = min->child;
     int element = min->element;
@@ -80,6 +82,8 @@ int extract_min(int *steps) {
     fib_heap.root = merge_list(fib_heap.root, child);
 
     heap_consolidate(&fib_heap, steps);
+
+    print_heap(&fib_heap);
 
     return element;
 }

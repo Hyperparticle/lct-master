@@ -9,7 +9,7 @@
 #include <math.h>
 #include "matrix.h"
 
-#define TRANSPOSE_THRESHOLD 16
+#define TRANSPOSE_THRESHOLD 4 * 1024 // 4 KiB
 
 static void transpose_diagonal(struct matrix a);
 static void transpose_swap(struct matrix a, struct matrix b);

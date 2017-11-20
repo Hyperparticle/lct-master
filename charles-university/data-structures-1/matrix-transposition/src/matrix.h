@@ -7,9 +7,8 @@
 #define MATRIX_TRANSPOSITION_MATRIX_H
 
 struct matrix {
-    unsigned int n;
+    unsigned int n, height, width;
     int *data;
-    int i, j;
 };
 
 struct matrix matrix_create(unsigned int n);

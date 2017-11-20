@@ -9,18 +9,21 @@
 #include <math.h>
 #include "matrix.h"
 
-#define TRANSPOSE_THRESHOLD 4
+#define TRANSPOSE_THRESHOLD 16
 
-static void swap(int *i, int *j);
-static inline int *m_data(struct matrix m, int i, int j);
 static void transpose_diagonal(struct matrix a);
 static void transpose_swap(struct matrix a, struct matrix b);
+static void swap(int *i, int *j);
+static inline int *m_data(struct matrix m, int i, int j);
+static inline void slice(struct matrix m, 
+                         struct matrix *a11, struct matrix *a12, 
+                         struct matrix *a21, struct matrix *a22);
 
 struct matrix matrix_create(unsigned int n) {
     unsigned int size = n * n;
     int *data = malloc(size * sizeof(int));
 
-    struct matrix m = { n, data, 0, 0 };
+    struct matrix m = { n, n, n, data };
 
     for (int i = 0; i < size; i++) {
         data[i] = i;
@@ -36,8 +39,8 @@ void matrix_free(struct matrix m) {
 void matrix_print(struct matrix m) {
     int padding = (int) ceil(log10(m.n * m.n)) + 1;
 
-    for (int i = m.i; i < m.n; i++) {
-        for (int j = m.j; j < m.n; j++) {
+    for (int i = 0; i < m.height; i++) {
+        for (int j = 0; j < m.width; j++) {
             printf("%*d", padding, *m_data(m, i, j));
         }
         printf("\n");
@@ -46,8 +49,8 @@ void matrix_print(struct matrix m) {
 }
 
 void transpose_simple(struct matrix m) {
-    for (int i = m.i; i < m.n; i++) {
-        for (int j = m.j; j < i; j++) {
+    for (int i = 0; i < m.height; i++) {
+        for (int j = 0; j < i; j++) {
             swap(m_data(m, i, j), m_data(m, j, i));
         }
     }
@@ -58,12 +61,13 @@ void transpose(struct matrix m) {
 }
 
 static void transpose_diagonal(struct matrix a) {
-    if (a.n <= TRANSPOSE_THRESHOLD) {
+    if (a.height * a.width <= TRANSPOSE_THRESHOLD) {
         transpose_simple(a);
         return;
     }
 
     struct matrix a11, a12, a21, a22;
+    slice(a, &a11, &a12, &a21, &a22);
 
     transpose_diagonal(a11);
     transpose_diagonal(a22);
@@ -71,17 +75,21 @@ static void transpose_diagonal(struct matrix a) {
 }
 
 static void transpose_swap(struct matrix a, struct matrix b) {
-    if (a.n < TRANSPOSE_THRESHOLD && b.n < TRANSPOSE_THRESHOLD) {
+    if (a.height * a.width <= TRANSPOSE_THRESHOLD &&
+        b.height * b.width <= TRANSPOSE_THRESHOLD) {
         // Swap chunks of memory
-        int tmp[a.n * a.n];
-        for (int i = 0; i < a.n; i++) {
-            memcpy(tmp, m_data(a, i, 0), a.n);
+        for (int i = 0; i < a.height; i++) {
+            for (int j = 0; j < a.width; j++) {
+                swap(m_data(a, i, j), m_data(b, j, i));
+            }
         }
+
         return;
     }
 
-    struct matrix a11, a12, a21, a22;
-    struct matrix b11, b12, b21, b22;
+    struct matrix a11, a12, a21, a22, b11, b12, b21, b22;
+    slice(a, &a11, &a12, &a21, &a22);
+    slice(b, &b11, &b12, &b21, &b22);
 
     transpose_swap(a11, b11);
     transpose_swap(a12, b21);
@@ -96,5 +104,27 @@ static void swap(int *i, int *j) {
 }
 
 static inline int *m_data(struct matrix m, int i, int j) {
-    return &m.data[m.i * m.n + m.j + i * m.n + j];
+    return &m.data[i * m.n + j];
+}
+
+static inline void slice(struct matrix m,
+                         struct matrix *a11, struct matrix *a12,
+                         struct matrix *a21, struct matrix *a22) {
+    struct matrix b[4] = { {
+            m.n, m.height / 2, m.width / 2, m.data
+    }, {
+        m.n, m.height / 2, m.width - m.width / 2,
+        m_data(m, 0, m.width / 2)
+    }, {
+        m.n, m.height - m.height / 2, m.width / 2,
+        m_data(m, m.height / 2, 0)
+    }, {
+        m.n, m.height - m.height / 2, m.width - m.width / 2,
+        m_data(m, m.height / 2, m.width / 2)
+    } };
+
+    *a11 = b[0];
+    *a12 = b[1];
+    *a21 = b[2];
+    *a22 = b[3];
 }

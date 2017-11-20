@@ -6,10 +6,11 @@
 #ifndef MATRIX_TRANSPOSITION_MATRIX_H
 #define MATRIX_TRANSPOSITION_MATRIX_H
 
-// #define PRINT_SWAP
+//#define PRINT_SWAP
 
 struct matrix {
     unsigned int n, height, width;
+    unsigned int i, j;
     int *data;
 };
 

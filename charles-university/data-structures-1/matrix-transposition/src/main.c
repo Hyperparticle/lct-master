@@ -7,84 +7,82 @@
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
+#include <stdlib.h>
+#include <string.h>
 #include "matrix.h"
 
-// #define START_K 54
-// #define END_K 150
-#define START_K 55
-#define END_K 56
+static bool simple = false;
 
-static void benchmark();
-static void print_benchmark();
+static void print_usage();
+static void benchmark(unsigned int k, bool simple);
+static void print_benchmark(unsigned int k, bool simple);
 
 static inline unsigned int n_val(unsigned int k) {
     return (unsigned int) ceil(pow(2, (double) k / 9.0));
 }
 
-// static bool valid_transpose(struct matrix m) {
-//     int prev = -1;
-//     for (int i = 0; i < m.height; i++) {
-//         for (int j = 0; j < m.width; j++) {
-//             int next = m.data[j * m.n + i];
-//             if (prev >= next) {
-//                 return false;
-//             }
-
-//             prev = next;
-//         }
-//     }
-
-//     return true;
-// }
-
 int main(int argc, char **argv) {
+    unsigned int k = 54;
+
+    if (argc >= 2 && argc <= 3) {
+        k = (unsigned) atoi(argv[1]);
+    } else {
+        print_usage();
+    }
+
+    if (argc == 3) {
+        if (strcmp(argv[2], "-s") == 0) {
+            simple = true;
+        } else {
+            print_usage();
+        }
+    }
+
 #ifndef PRINT_SWAP
-    benchmark();
+    benchmark(k, simple);
 #else
-    print_benchmark();
+    print_benchmark(k, simple);
 #endif
 
     return 0;
 }
 
-static void benchmark() {
-    clock_t begin, end;
-
-    for (unsigned int k = START_K; k < END_K; k++) {
-        struct matrix m_simple = matrix_create(n_val(k));
-        struct matrix m = matrix_create(n_val(k));
-
-        begin = clock();
-        transpose_simple(m_simple);
-        end = clock();
-        printf("%f,", (double)(end - begin) / CLOCKS_PER_SEC);
-
-        begin = clock();
-        matrix_print(m);
-        transpose(m);
-        matrix_print(m);
-        end = clock();
-        printf("%f\n", (double)(end - begin) / CLOCKS_PER_SEC);
-
-//        transpose_simple(m);
-//        if (!valid_transpose(m)) {
-//            printf("Fail!\n");
-//        }
-
-        matrix_free(m_simple);
-        matrix_free(m);
-    }
+static void print_usage() {
+    fprintf(stderr, "Usage: matrix <k> [-s]\n");
+    fprintf(stderr, "k  - k value (n = ceil(2^(k/9)))\n");
+    fprintf(stderr, "-s - (optional) run the simple transpose algorithm \n");
+    exit(EXIT_FAILURE);
 }
 
-static void print_benchmark() {
-    for (unsigned int k = START_K; k < END_K; k++) {
-        unsigned int n = n_val(k);
-        struct matrix m = { n, n, n, NULL };
+static void benchmark(unsigned int k, bool simple) {
+    clock_t begin, end;
 
-        printf("N %d\n", m.n);
+    struct matrix m = matrix_create(n_val(k));
+
+    begin = clock();
+    if (simple) {
         transpose_simple(m);
-        printf("E\n");
-        
-        matrix_free(m);
+    } else {
+        transpose(m);
     }
+    end = clock();
+
+    printf("%d,%f\n", m.n, (double)(end - begin) / CLOCKS_PER_SEC);
+
+    matrix_free(m);
+}
+
+static void print_benchmark(unsigned int k, bool simple) {
+    unsigned int n = n_val(k);
+    struct matrix m = { n, n, n, 0, 0, NULL };
+
+    printf("N %d\n", m.n);
+    if (simple) {
+        transpose_simple(m);
+    } else {
+        transpose(m);
+    }
+    printf("E\n");
+
+    matrix_free(m);
 }

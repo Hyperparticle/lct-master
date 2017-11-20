@@ -8,5 +8,8 @@ add_executable(cachesim ${SOURCE_FILES_SIM})
 
 set(SOURCE_FILES src/main.c src/matrix.c src/matrix.h)
 add_executable(matrix ${SOURCE_FILES})
+add_executable(matrix-print ${SOURCE_FILES})
 
 target_link_libraries(matrix m)
+target_link_libraries(matrix-print m)
+target_compile_definitions(matrix-print PRIVATE PRINT_SWAP)

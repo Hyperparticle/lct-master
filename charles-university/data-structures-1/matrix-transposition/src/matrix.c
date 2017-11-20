@@ -5,11 +5,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include "matrix.h"
 
-#define TRANSPOSE_THRESHOLD 4 * 1024 // 4 KiB
+//#define TRANSPOSE_THRESHOLD (4 * 1024) // 4 KiB
+#define TRANSPOSE_THRESHOLD (1024) // 1 KiB
 
 static void transpose_diagonal(struct matrix a);
 static void transpose_swap(struct matrix a, struct matrix b);
@@ -23,7 +23,7 @@ struct matrix matrix_create(unsigned int n) {
     unsigned int size = n * n;
     int *data = malloc(size * sizeof(int));
 
-    struct matrix m = { n, n, n, data };
+    struct matrix m = { n, n, n, 0, 0, data };
 
    for (long i = 0; i < size; i++) {
        data[i] = (int) i;
@@ -54,7 +54,7 @@ void transpose_simple(struct matrix m) {
 #ifndef PRINT_SWAP
             swap(m_data(m, i, j), m_data(m, j, i));
 #else
-            printf("X %d %d %d %d\n", i, j, j, i);
+            printf("X %d %d %d %d\n", m.i + i, m.j + j, m.j + j, m.i + i);
 #endif
         }
     }
@@ -87,7 +87,7 @@ static void transpose_swap(struct matrix a, struct matrix b) {
 #ifndef PRINT_SWAP
                 swap(m_data(a, i, j), m_data(b, j, i));
 #else
-                printf("X %d %d %d %d\n", i, j, j, i);
+                printf("X %d %d %d %d\n", a.i + i, a.j + j, a.j + j, a.i + i);
 #endif
                 
             }
@@ -110,16 +110,16 @@ static inline void slice(struct matrix m,
                          struct matrix *a11, struct matrix *a12,
                          struct matrix *a21, struct matrix *a22) {
     struct matrix b[4] = { {
-            m.n, m.height / 2, m.width / 2, m.data
+        m.n, m.height / 2, m.width / 2, m.i, m.j, m.data
     }, {
         m.n, m.height / 2, m.width - m.width / 2,
-        m_data(m, 0, m.width / 2)
+        m.i, m.j + m.width / 2, m.data
     }, {
         m.n, m.height - m.height / 2, m.width / 2,
-        m_data(m, m.height / 2, 0)
+        m.i + m.height / 2, m.j, m.data
     }, {
         m.n, m.height - m.height / 2, m.width - m.width / 2,
-        m_data(m, m.height / 2, m.width / 2)
+        m.i + m.height / 2, m.j + m.width / 2, m.data
     } };
 
     *a11 = b[0];
@@ -135,5 +135,5 @@ static void swap(int *i, int *j) {
 }
 
 static inline int *m_data(struct matrix m, int i, int j) {
-    return &m.data[i * m.n + j];
+    return &m.data[(m.i + i) * m.n + m.j + j];
 }

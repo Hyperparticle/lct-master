@@ -25,9 +25,9 @@ struct matrix matrix_create(unsigned int n) {
 
     struct matrix m = { n, n, n, data };
 
-    for (int i = 0; i < size; i++) {
-        data[i] = i;
-    }
+//    for (long i = 0; i < size; i++) {
+//        data[i] = (int) i;
+//    }
 
     return m;
 }

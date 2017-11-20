@@ -13,11 +13,11 @@
 
 static void transpose_diagonal(struct matrix a);
 static void transpose_swap(struct matrix a, struct matrix b);
-static void swap(int *i, int *j);
-static inline int *m_data(struct matrix m, int i, int j);
 static inline void slice(struct matrix m, 
                          struct matrix *a11, struct matrix *a12, 
                          struct matrix *a21, struct matrix *a22);
+static void swap(int *i, int *j);
+static inline int *m_data(struct matrix m, int i, int j);
 
 struct matrix matrix_create(unsigned int n) {
     unsigned int size = n * n;
@@ -25,9 +25,9 @@ struct matrix matrix_create(unsigned int n) {
 
     struct matrix m = { n, n, n, data };
 
-//    for (long i = 0; i < size; i++) {
-//        data[i] = (int) i;
-//    }
+   for (long i = 0; i < size; i++) {
+       data[i] = (int) i;
+   }
 
     return m;
 }
@@ -51,7 +51,11 @@ void matrix_print(struct matrix m) {
 void transpose_simple(struct matrix m) {
     for (int i = 0; i < m.height; i++) {
         for (int j = 0; j < i; j++) {
+#ifndef PRINT_SWAP
             swap(m_data(m, i, j), m_data(m, j, i));
+#else
+            printf("X %d %d %d %d\n", i, j, j, i);
+#endif
         }
     }
 }
@@ -80,7 +84,12 @@ static void transpose_swap(struct matrix a, struct matrix b) {
         // Swap chunks of memory
         for (int i = 0; i < a.height; i++) {
             for (int j = 0; j < a.width; j++) {
+#ifndef PRINT_SWAP
                 swap(m_data(a, i, j), m_data(b, j, i));
+#else
+                printf("X %d %d %d %d\n", i, j, j, i);
+#endif
+                
             }
         }
 
@@ -95,16 +104,6 @@ static void transpose_swap(struct matrix a, struct matrix b) {
     transpose_swap(a12, b21);
     transpose_swap(a21, b12);
     transpose_swap(a22, b22);
-}
-
-static void swap(int *i, int *j) {
-    int tmp = *i;
-    *i = *j;
-    *j = tmp;
-}
-
-static inline int *m_data(struct matrix m, int i, int j) {
-    return &m.data[i * m.n + j];
 }
 
 static inline void slice(struct matrix m,
@@ -127,4 +126,14 @@ static inline void slice(struct matrix m,
     *a12 = b[1];
     *a21 = b[2];
     *a22 = b[3];
+}
+
+static void swap(int *i, int *j) {
+    int tmp = *i;
+    *i = *j;
+    *j = tmp;
+}
+
+static inline int *m_data(struct matrix m, int i, int j) {
+    return &m.data[i * m.n + j];
 }

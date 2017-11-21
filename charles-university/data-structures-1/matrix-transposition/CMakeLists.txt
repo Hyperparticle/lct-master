@@ -3,6 +3,10 @@ project(matrix_transposition)
 
 set(CMAKE_C_STANDARD 99)
 
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 set(SOURCE_FILES_SIM src/cachesim.c)
 add_executable(cachesim ${SOURCE_FILES_SIM})
 

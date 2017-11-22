@@ -1,0 +1,42 @@
+# Matrix Transposition
+
+The following program implements two in-place matrix transposition algorithms to analyzing their processor cache utilization: a simple nested loop and a recursive cache-oblivious algorithm.
+
+- Homework 3 Specification - https://kam.mff.cuni.cz/~ds1/hw/3-transpose/problem.html
+- Basic Rules - https://kam.mff.cuni.cz/~ds1/hw/rules.html
+
+## Project Structure
+
+- README     - This file
+- Makefile   - Builds the programs
+- cachesim.c - Simulates matrix transposition and outputs cache statistics
+- main.c     - Runs a matrix transposition for a given k-size
+- matrix.c/h - Defines simple and recursive matrix transposition algorithms
+- fibheaptest.sh - Runs all tests and prints results
+
+## Processor Specification
+- Intel Core i7 7700k
+- 8 MiB Cache
+  - 256 KiB L1
+  - 1 MiB L2
+  - 8 MiB L3
+
+## Building and Running
+
+### Prerequisites:
+- gcc/g++
+- make
+
+### To Build:
+
+$ make
+
+Run all tests with:
+
+$ bash ./fibheaptest.sh
+
+### To Clean:
+
+$ make clean
+
+

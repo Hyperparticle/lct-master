@@ -1,0 +1,126 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!-- saved from url=(0056)https://kam.mff.cuni.cz/~ds1/hw/3-transpose/problem.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<!-- <link rel=stylesheet title=Default href='../../css/style.css' type='text/css' media=all> -->
+
+<title>Data Structures I: Homework 3</title>
+
+<style></style><style id="style-1-cropbar-clipper">/* Copyright 2014 Evernote Corporation. All rights reserved. */
+.en-markup-crop-options {
+    top: 18px !important;
+    left: 50% !important;
+    margin-left: -100px !important;
+    width: 200px !important;
+    border: 2px rgba(255,255,255,.38) solid !important;
+    border-radius: 4px !important;
+}
+
+.en-markup-crop-options div div:first-of-type {
+    margin-left: 0px !important;
+}
+</style></head>
+<body>
+
+<h1>Data Structures I – Homework 3</h1>
+
+<p>
+<b>Deadline:</b> December 10, 2017<br>
+<b>Submit:</b> by <a href="https://kam.mff.cuni.cz/~ds1/">web form</a><br>
+<b>General rules:</b> <a href="https://kam.mff.cuni.cz/~ds1/hw/rules.html">Read them carefully</a>
+
+</p><h2>Problem description</h2>
+
+<p>Implement both a trivial and an efficient cache-oblivious algorithm
+for transposing N×N matrices, whose elements are 32-bit integers. Measure
+the running time on your computer, and then use our cache simulator to determine
+the number of page faults on an idealized cache.
+
+</p><p>As you probably notice in measurement results, the cache-oblivious algorithm
+behaves a bit differently on matrices whose size is a power of two. The goal of this
+exercise includes observation of these effects. Therefore, your program must not be
+limited to powers of two. It is also not permitted to re-format the matrix to a power
+of two. The matrix must be stored in the memory row by row in N*N consecutive numbers.
+It should be transposed in-place, no auxiliary matrices are allowed.
+
+</p><p>A recursive function for matrix transposition can be written in approximately
+10 lines. It is likely that this is the easies homework unless you make it
+unnecessarily complicated.
+
+</p><h2>Cache simulator</h2>
+
+<p> Modify your program so that it prints out swapped elements instead of
+actually swapping elements. Pass this output to our cache simulator to
+determine the number of page faults of an idealized cache as presented during
+the lecture. We assume that the cache is fully associative and it uses LRU
+strategy for page replacement.
+
+</p><p>Download the <a href="https://kam.mff.cuni.cz/~ds1/hw/3-transpose/cachesim.c">simulator</a> and start it with the
+following parameters:
+
+</p><ul>
+<li><code><em>B</em></code> – size of a page;
+</li><li><code><em>C</em></code> – number of pages in the cache.
+</li></ul>
+
+<p>The simulator reads commands for transposing a matrix on the standard input.
+Every row has one of the following forms:
+
+</p><ul>
+<li><code>N <em>n</em></code> – initialize an <em>n</em>×<em>n</em> matrix
+</li><li><code>X <em>r<sub>1</sub> s<sub>1</sub> r<sub>2</sub> s<sub>2</sub></em></code> –
+swap elements (r<sub>1</sub>,s<sub>1</sub>) and (r<sub>2</sub>,s<sub>2</sub>),
+assuming that coordinates are numbered from 0 to n-1.
+</li><li><code>E</code> – terminate the transposition procedure
+</li></ul>
+
+<p>The output of the simulator is a text file describing results of the experiment:
+
+</p><ul>
+<li><code>Elements: <em>the number of elements of the matrix</em></code>
+</li><li><code>Accesses: <em>the number of memory accesses</em></code>
+</li><li><code>Misses: <em>the number of memory transfers from the main memory to the cache</em></code>
+</li><li><code>Missed-bytes: <em>the total number of bytes loaded to the cache</em></code>
+</li></ul>
+
+<p>Use the following cache parameters for your experiments:
+
+</p><table style="text-align: right" border="1" cellpadding="2" cellspacing="0">
+<tbody><tr><th>Size of one page [B]</th><th>Number of pages</th><th>Size of the cache [B]
+</th></tr><tr><td>64</td><td>64</td><td>4096
+</td></tr><tr><td>64</td><td>1024</td><td>65536
+</td></tr><tr><td>64</td><td>4096</td><td>262144
+</td></tr><tr><td>512</td><td>512</td><td>262144
+</td></tr><tr><td>4096</td><td>64</td><td>262144
+</td></tr></tbody></table>
+
+<p>The simulator expects that the matrix is stored by rows and the first row
+starts at the beginning of a page.
+
+</p><h2>Resulting graphs</h2>
+
+<p>Transpose matrices of sizes N×N, where N=⌈2<sup>k/9</sup>⌉ for
+k = 54, 55, 56, … until you run out of memory (in case of the simulator,
+you may stop when the measured values become stable). Repeat the measurements
+on a real computer a few times, so that the results are accurate.
+
+</p><p>The report is expected to study the following behaviour:
+
+</p><ul>
+<li>Compare the running time of the trivial and the cache-oblivious algorithms
+on a real computer. Also report on the parameters of the used computer
+(processor type and the size of cache).
+
+</li><li>Study how the number of page faults of both algorithms is influenced by the
+parameters of our idealized caches.
+
+</li></ul>
+
+<p>In all graphs, plot the number of page faults for a single swap of two
+elements versus the size of a matrix; that is, the size N
+is on the horizontal axis and the vertical axis determines the average time
+of swapping two elements of a matrix.
+
+
+
+</p></body></html>

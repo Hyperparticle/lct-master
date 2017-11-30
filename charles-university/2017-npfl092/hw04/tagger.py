@@ -28,4 +28,4 @@ class Tagger:
     def predict(self, word):
         word = word.lower()
         counts = self.model
-        return counts[word].most_common(1)[0][0] if word in counts else ""
+        return counts[word].most_common(1)[0][0] if word in counts else "N"

@@ -24,10 +24,10 @@ cmd = sys.argv[1]
 
 if (cmd == 'download'):
     download('http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl092/html/premium_tagger/tagger-devel.tsv', text_devel)
-
     download('http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl092/html/premium_tagger/tagger-eval.tsv', text_eval)
 elif (cmd == 'train'):
     tagger = Tagger()
+
     with open(text_devel, 'r') as f:
         for line in f:
             s = line.split()
@@ -40,8 +40,8 @@ elif (cmd == 'train'):
 elif (cmd == 'predict'):
     tagger = Tagger()
     tagger.load(model)
-
     lines = []
+
     with open(text_eval, 'r') as f:
         for line in f:
             s = line.split()
@@ -73,4 +73,4 @@ elif (cmd == 'eval'):
             if tag == predicted:
                 correct += 1
     
-    print(str(correct) + "/" + str(total) + " " + str(correct / total))
+    print("accuracy: " + str(correct) + "/" + str(total) + " = " + str(correct / total))

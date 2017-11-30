@@ -5,6 +5,7 @@
 from collections import Counter
 from collections import defaultdict
 import pickle
+import re
 
 class Tagger:
     def __init__(self):
@@ -28,4 +29,6 @@ class Tagger:
     def predict(self, word):
         word = word.lower()
         counts = self.model
-        return counts[word].most_common(1)[0][0] if word in counts else "N"
+        if (re.match(r'^[0-9]', word)):
+            return 'C'
+        return counts[word].most_common(1)[0][0] if word in counts else 'N'

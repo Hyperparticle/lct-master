@@ -2,7 +2,13 @@
 
 import sys
 import urllib.request
-import tagger
+from tagger import Tagger
+
+text_devel = 'tagger-devel.tsv'
+text_eval = 'tagger-eval.tsv'
+model = 'model.pkl'
+
+# argparse
 
 def download(url, filename):
     response = urllib.request.urlopen(url)
@@ -17,13 +23,54 @@ if (len(sys.argv) != 2):
 cmd = sys.argv[1]
 
 if (cmd == 'download'):
-    download('http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl092/html/premium_tagger/tagger-devel.tsv', 'tagger-devel.tsv')
+    download('http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl092/html/premium_tagger/tagger-devel.tsv', text_devel)
 
-    download('http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl092/html/premium_tagger/tagger-eval.tsv', 'tagger-eval.tsv')
-# elif (cmd == 'train'):
+    download('http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl092/html/premium_tagger/tagger-eval.tsv', text_eval)
+elif (cmd == 'train'):
+    tagger = Tagger()
+    with open(text_devel, 'r') as f:
+        for line in f:
+            s = line.split()
+            if (len(s) != 2):
+                continue
+            word, tag = s
+            tagger.see(word, tag)
+        tagger.train()
+        tagger.save(model)
+elif (cmd == 'predict'):
+    tagger = Tagger()
+    tagger.load(model)
 
-# elif (cmd == 'predict'):
+    lines = []
+    with open(text_eval, 'r') as f:
+        for line in f:
+            s = line.split()
 
-# elif (cmd == 'eval'):
+            if (len(s) < 2):
+                lines.append("\n")
+                continue
 
+            word, tag = s
+            predicted = tagger.predict(word)
 
+            lines.append(word + "\t" + tag + "\t" + predicted + "\n")
+    with open(text_eval, 'w') as f:
+        for line in lines:
+            f.write(line)
+elif (cmd == 'eval'):
+    correct, total = 0, 0
+
+    with open(text_eval, 'r') as f:
+        for line in f:
+            s = line.split()
+
+            if (len(s) != 3):
+                continue
+
+            word, tag, predicted = s
+
+            total += 1
+            if tag == predicted:
+                correct += 1
+    
+    print(str(correct) + "/" + str(total) + " " + str(correct / total))

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# if __name__ == "__main__"
+
 from collections import Counter
 from collections import defaultdict
 import pickle
@@ -26,4 +28,4 @@ class Tagger:
     def predict(self, word):
         word = word.lower()
         counts = self.model
-        counts[word].most_common(1)[0][0] if word in counts else ""
+        return counts[word].most_common(1)[0][0] if word in counts else ""

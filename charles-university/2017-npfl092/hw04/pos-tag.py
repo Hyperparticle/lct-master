@@ -17,7 +17,7 @@ def download(url, filename):
         f.write(content)
 
 if (len(sys.argv) != 2):
-    print('Usage: ')
+    print('Usage: pos-tag.py [cmd]')
     exit()
 
 cmd = sys.argv[1]

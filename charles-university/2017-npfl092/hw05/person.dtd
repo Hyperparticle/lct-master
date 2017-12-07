@@ -1,0 +1,14 @@
+<!ELEMENT person (company,hobbies,home)>
+<!ATTLIST person firstname CDATA #REQUIRED lastname CDATA #REQUIRED>
+
+<!ELEMENT company (name,city)>
+<!ATTLIST company id CDATA #REQUIRED>
+<!ELEMENT name (#PCDATA)>
+<!ELEMENT city (#PCDATA)>
+
+<!ELEMENT hobbies (hobby*)>
+<!ELEMENT hobby (#PCDATA)>
+<!ATTLIST hobby rating CDATA #REQUIRED>
+
+<!ELEMENT home (address,city)>
+<!ELEMENT address (#PCDATA)>

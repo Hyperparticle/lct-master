@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE person SYSTEM "person.dtd">
+<person firstname="John" lastname="Smith">
+  <company id="abc">
+    <name>Funny Business</name>
+    <city>Timbuktu</city>
+  </company>
+  <hobbies>
+    <hobby rating="8">woodworking</hobby>
+    <hobby rating="8">camping</hobby>
+  </hobbies>
+  <home>
+    <address>123 fake st.</address>
+    <city>Timbuktu</city>
+  </home>
+</person>

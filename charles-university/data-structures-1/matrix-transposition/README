@@ -12,7 +12,7 @@ The following program implements two in-place matrix transposition algorithms to
 - cachesim.c - Simulates matrix transposition and outputs cache statistics
 - main.c     - Runs a matrix transposition for a given k-size
 - matrix.c/h - Defines simple and recursive matrix transposition algorithms
-- fibheaptest.sh - Runs all tests and prints results
+- transposetest.sh - Runs all tests and prints results
 
 ## Processor Specification
 - Intel Core i7 7700k
@@ -33,7 +33,7 @@ $ make
 
 Run all tests with:
 
-$ bash ./fibheaptest.sh
+$ bash ./transposetest.sh
 
 ### To Clean:
 

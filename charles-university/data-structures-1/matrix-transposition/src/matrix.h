@@ -21,14 +21,11 @@ struct matrix {
     int *data;                  // The starting point of the entire matrix
 };
 
-/** Creates and returnes a heap-allocated matrix of size n x n */
+/** Creates and returns a heap-allocated matrix of size n x n */
 struct matrix matrix_create(unsigned int n);
 
 /** Frees a matrix's data */
 void matrix_free(struct matrix m);
-
-/** Prints to stdout the values of a matrix */
-void matrix_print(struct matrix m);
 
 /** Transposes a matrix with a simple nested loop */
 void transpose_simple(struct matrix m);

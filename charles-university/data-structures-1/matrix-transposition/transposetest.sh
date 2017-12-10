@@ -16,7 +16,7 @@ print_hardware_result() {
 
 echo "Simple Test"
 echo "n,simple_total,simple"
-for k in {54..142}
+for k in {54..143}
 do
     print_hardware_result ${k} -s
 done
@@ -24,7 +24,7 @@ echo
 
 echo "Recursive Test"
 echo "n,recursive_total,recursive"
-for k in {54..142}
+for k in {54..143}
 do
     print_hardware_result ${k}
 done
@@ -56,7 +56,7 @@ echo "Cache Test (Simple)"
 echo "B,C,k,n,simple_total,simple"
 for i in 64,64 64,1024 64,4096 512,512 4096,64; do
     IFS=',' read B C <<< "${i}"
-    for k in {54..120}
+    for k in {54..126}
     do
         print_sim_result ${k} ${B} ${C} -s
     done
@@ -67,7 +67,7 @@ echo "Cache Test (Recursive)"
 echo "B,C,k,n,recursive_total,recursive"
 for i in 64,64 64,1024 64,4096 512,512 4096,64; do
     IFS=',' read B C <<< "${i}"
-    for k in {54..120}
+    for k in {54..126}
     do
         print_sim_result ${k} ${B} ${C}
     done

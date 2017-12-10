@@ -73,27 +73,31 @@ static void print_usage() {
 }
 
 static void benchmark(unsigned int k, bool simple) {
-    clock_t begin, end;
+    clock_t begin, end = 0;
+    unsigned int runs = k <= 90 ? 20 : 2;
 
     struct matrix m = matrix_create(n_val(k));
 
-    // Time the transposition algorithm
+    // Calculate an average of runs
     begin = clock();
-    if (simple) {
-        transpose_simple(m);
-    } else {
-        transpose(m);
+    for (int i = 0; i < runs; i++) {
+        // Time the transposition algorithm
+        if (simple) {
+            transpose_simple(m);
+        } else {
+            transpose(m);
+        }
     }
     end = clock();
 
-    printf("%d,%f\n", m.n, (double)(end - begin) / CLOCKS_PER_SEC);
+    printf("%d,%f\n", m.n, (double) (end - begin) / runs / CLOCKS_PER_SEC);
 
     matrix_free(m);
 }
 
 static void print_benchmark(unsigned int k, bool simple) {
     unsigned int n = n_val(k);
-    struct matrix m = { n, n, n, 0, 0, NULL };
+    struct matrix m = {n, n, n, 0, 0, NULL};
 
     // Print all operations in the transposition algorithm
     printf("N %d\n", m.n);

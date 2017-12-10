@@ -22,8 +22,8 @@ static void transpose_diagonal(struct matrix a);
 static void transpose_swap(struct matrix a, struct matrix b);
 
 /** Slices the matrix into 4 parts, modifying the given axx matrices accordingly */
-static inline void slice(struct matrix m, 
-                         struct matrix *a11, struct matrix *a12, 
+static inline void slice(struct matrix m,
+                         struct matrix *a11, struct matrix *a12,
                          struct matrix *a21, struct matrix *a22);
 
 /** Swaps the contents of two integers */
@@ -36,7 +36,7 @@ struct matrix matrix_create(unsigned int n) {
     unsigned int size = n * n;
     int *data = malloc(size * sizeof(int));
 
-    struct matrix m = { n, n, n, 0, 0, data };
+    struct matrix m = {n, n, n, 0, 0, data};
 
     return m;
 }
@@ -45,21 +45,9 @@ void matrix_free(struct matrix m) {
     free(m.data);
 }
 
-void matrix_print(struct matrix m) {
-    int padding = (int) ceil(log10(m.n * m.n)) + 1;
-
-    for (int i = 0; i < m.height; i++) {
-        for (int j = 0; j < m.width; j++) {
-            printf("%*d", padding, *m_data(m, i, j));
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
 void transpose_simple(struct matrix m) {
     for (int i = 0; i < m.height; i++) {
-        for (int j = 0; j < i; j++) {
+        for (int j = i + 1; j < m.width; j++) {
 #ifndef PRINT_SWAP // Compiler flag: run an actual matrix transposition or just print all operations
             swap(m_data(m, i, j), m_data(m, j, i));
 #else

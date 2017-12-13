@@ -1,7 +1,7 @@
 all: wellformed valid
 
 wellformed:
-	xmllint --noout --valid person.xml
+	xmllint --noout person.xml
 
 valid:
 	xmllint --noout --dtdvalid person.dtd person.xml

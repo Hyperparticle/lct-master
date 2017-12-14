@@ -13,6 +13,7 @@ with open(tsvfile) as tsv:
     for line in tsv:
       if line.startswith('#'):
         sentence = ET.SubElement(data, 'sentence')
+        sentence.set('comment', line)
       elif line.strip():
         id, token, stem, tag, dependency = line.strip().split('\t')
 

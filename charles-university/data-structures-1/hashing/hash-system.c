@@ -46,8 +46,8 @@ void tabulation_init(struct hash_system *system) {
 
     state->table = malloc(state->num_blocks * tabulation_table_size * sizeof(uint32_t));
 
-    for (uint32_t i = 0; i < state->num_blocks; i++) {
-        for (uint32_t j = 0; j < tabulation_table_size; j++) {
+    for (uint32_t i = 0; i < tabulation_table_size; i++) {
+        for (uint32_t j = 0; j < state->num_blocks; j++) {
             uint32_t next_random = (uint32_t) rng_next() >> (UNIV_BITS - system->hash_size);
             state->table[i * state->num_blocks + j] = next_random;
         }
@@ -62,7 +62,7 @@ uint32_t tabulate(struct hash_system *system, uint32_t x) {
 
     for (uint32_t i = 0; i < state->num_blocks; i++) {
         uint32_t split = (x >> (UNIV_BITS - (i - 1) * x_bits)) & MASK(x_bits);
-        xor ^= state->table[i * state->num_blocks + split];
+        xor ^= state->table[split * state->num_blocks + i];
     }
 
     return xor;

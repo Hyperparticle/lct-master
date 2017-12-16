@@ -12,21 +12,18 @@
 
 static uint64_t rng_state[2];
 
-static uint64_t rng_rotl(uint64_t x, uint32_t k)
-{
+static uint64_t rng_rotl(uint64_t x, uint32_t k) {
     return (x << k) | (x >> (64 - k));
 }
 
-void rng_init(uint32_t seed)
-{
+void rng_init(uint32_t seed) {
     rng_state[0] = seed * 0xdeadbeef;
     rng_state[1] = seed ^ 0xc0de1234;
-    for (int i=0; i<100; i++)
+    for (int i = 0; i < 100; i++)
         rng_next();
 }
 
-uint64_t rng_next()
-{
+uint64_t rng_next() {
     uint64_t s0 = rng_state[0], s1 = rng_state[1];
     uint64_t result = s0 + s1;
     s1 ^= s0;

@@ -23,9 +23,9 @@ struct hash_table {
 
 struct hash_table hash_table_init(struct hash_system system, hash_func hash, rebuild_func rebuild);
 
-void insert_cuckoo(struct hash_table *table, uint32_t x);
+long insert_cuckoo(struct hash_table *table, uint32_t x);
 
-void insert_linear_probe(struct hash_table *table, uint32_t x);
+long insert_linear_probe(struct hash_table *table, uint32_t x);
 
 double load_factor(struct hash_table table);
 

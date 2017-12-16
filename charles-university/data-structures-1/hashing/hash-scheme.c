@@ -15,10 +15,11 @@ struct hash_table hash_table_init(struct hash_system system, hash_func hash, reb
     uint32_t capacity = 1u << system.hash_size;
 
     struct hash_table table = {
+            .hash_size = system.hash_size,
             .capacity = capacity,
             .element_count = 0,
             .elements = calloc(capacity, sizeof(uint32_t)),
-            .system = system,
+            .system = {system, system},
             .hash = hash,
             .rebuild = rebuild
     };
@@ -27,8 +28,10 @@ struct hash_table hash_table_init(struct hash_system system, hash_func hash, reb
 }
 
 void insert_cuckoo(struct hash_table *table, uint32_t x) {
-    table->rebuild(&table->system);
-    uint32_t i = table->hash(&table->system, x);
+    table->rebuild(&table->system[0]);
+    table->rebuild(&table->system[1]);
+    uint32_t i = table->hash(&table->system[0], x);
+    uint32_t j = table->hash(&table->system[1], x);
 
 //    if (first_build || rebuild_table) {
 //        first_build = false;
@@ -38,8 +41,6 @@ void insert_cuckoo(struct hash_table *table, uint32_t x) {
 //
 //    if (rebuild_table) {
 //        rebuild_table = false;
-//        // TODO: make generic, maybe use function pointer arrays
-//        // TODO: recursion needs work
 //        struct hash_table new_table = hash_table_init(table->hash_size, table->num_blocks);
 //        for (uint32_t i = 0; i < table->capacity; i++) {
 //            uint32_t element = table->elements[i];

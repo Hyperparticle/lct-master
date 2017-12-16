@@ -12,10 +12,11 @@
 #include "hash-system.h"
 
 struct hash_table {
+    uint32_t hash_size;
     uint32_t capacity;
     uint32_t element_count;
     uint32_t *elements;
-    struct hash_system system;
+    struct hash_system system[2];
     hash_func hash;
     rebuild_func rebuild;
 };

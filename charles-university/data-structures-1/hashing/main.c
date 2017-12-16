@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     struct hash_table table = hash_table_init(system, tabulate, tabulation_init);
 
     for (uint32_t i = 0; i < table.capacity / 2; i++) {
-        uint32_t x = random_element(table.system.hash_size);
+        uint32_t x = random_element(table.hash_size);
         insert_cuckoo(&table, x);
     }
 

@@ -16,21 +16,39 @@ struct tabulation_state {
 };
 
 struct multiply_shift_state {
-    uint32_t hash_size; // Hash table size = 2 ^ hash_bits
     uint32_t a, b;      // Random integers for multiply shift hashing
 };
 
-struct naive_modulo_state {
+struct hash_system {
     uint32_t hash_size; // Hash table size = 2 ^ hash_bits
+    union {
+        struct tabulation_state tabulation;
+        struct multiply_shift_state multiply_shift;
+    } state;
 };
 
-struct tabulation_state tabulation_init(uint32_t blocks, uint32_t hash_size);
-uint32_t tabulate(struct tabulation_state state, uint32_t x);
+typedef uint32_t (*hash_func)(struct hash_system *, uint32_t);
 
-struct multiply_shift_state multiply_shift_init(uint32_t hash_size);
-uint32_t multiply_shift(struct multiply_shift_state state, uint32_t x);
+typedef void (*rebuild_func)(struct hash_system *);
 
-struct naive_modulo_state naive_modulo_init(uint32_t hash_size);
-uint32_t naive_modulo(struct naive_modulo_state state, uint32_t x);
+struct hash_system tabulation_system(uint32_t hash_size, uint32_t num_blocks);
+
+struct hash_system muliply_shift_system(uint32_t hash_size);
+
+struct hash_system naive_modulo_system(uint32_t hash_size);
+
+void tabulation_init(struct hash_system *system);
+
+uint32_t tabulate(struct hash_system *system, uint32_t x);
+
+void multiply_shift_init(struct hash_system *system);
+
+uint32_t multiply_shift(struct hash_system *system, uint32_t x);
+
+void naive_modulo_init(struct hash_system *system);
+
+uint32_t naive_modulo(struct hash_system *system, uint32_t x);
+
+uint32_t random_element(uint32_t hash_size);
 
 #endif //HASHING_HASH_SYSTEM_H

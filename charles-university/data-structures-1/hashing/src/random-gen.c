@@ -9,7 +9,6 @@
 
 #include "random-gen.h"
 
-
 static uint64_t rng_state[2];
 
 static uint64_t rng_rotl(uint64_t x, uint32_t k) {

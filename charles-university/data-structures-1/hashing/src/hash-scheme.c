@@ -36,6 +36,14 @@ struct hash_table hash_table_init(struct hash_system system, hash_func hash, reb
 
 long insert_cuckoo(struct hash_table *table, uint32_t x) {
     uint32_t rehashes = 0;
+
+    // Check for duplicates
+    uint32_t pos0 = table->hash(&table->system[0], x);
+    uint32_t pos1 = table->hash(&table->system[1], x);
+    if (table->elements[pos0] == x || table->elements[pos1] == x) {
+        return 0;
+    }
+
     return insert_cuckoo_rec(table, x, &rehashes);
 }
 
@@ -45,14 +53,18 @@ static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *re
     long accesses = 0;
 
     uint32_t pos = table->hash(&table->system[0], x);
+    uint32_t pos2 = table->hash(&table->system[1], x);
+
+    if (table->elements[pos] == x || table->elements[pos2] == x) {
+        return accesses;
+    }
+
     for (uint32_t i = 0; i < table->element_count + 1; i++) {
         accesses++;
 
         if (table->elements[pos] == 0) {
             table->elements[pos] = x;
             table->element_count++;
-            return accesses;
-        } else if (table->elements[pos] == x) {
             return accesses;
         }
 

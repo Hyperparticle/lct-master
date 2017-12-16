@@ -21,7 +21,7 @@ struct hash_system tabulation_system(uint32_t hash_size, uint32_t num_blocks) {
     return system;
 }
 
-struct hash_system muliply_shift_system(uint32_t hash_size) {
+struct hash_system multiply_shift_system(uint32_t hash_size) {
     struct hash_system system = {
             .hash_size = hash_size,
             .type = mul_shift,

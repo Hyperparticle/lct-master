@@ -15,6 +15,7 @@
 struct hash_system tabulation_system(uint32_t hash_size, uint32_t num_blocks) {
     struct hash_system system = {
             .hash_size = hash_size,
+            .type = tab,
             .state.tabulation = {.num_blocks = num_blocks, .table = NULL}
     };
     return system;
@@ -23,6 +24,7 @@ struct hash_system tabulation_system(uint32_t hash_size, uint32_t num_blocks) {
 struct hash_system muliply_shift_system(uint32_t hash_size) {
     struct hash_system system = {
             .hash_size = hash_size,
+            .type = mul_shift,
             .state.multiply_shift = {.a = 0, .b = 0}
     };
     return system;
@@ -31,6 +33,7 @@ struct hash_system muliply_shift_system(uint32_t hash_size) {
 struct hash_system naive_modulo_system(uint32_t hash_size) {
     struct hash_system system = {
             .hash_size = hash_size,
+            .type = naive_mod,
             .state = {0}
     };
     return system;
@@ -41,7 +44,6 @@ void tabulation_init(struct hash_system *system) {
 
     uint32_t tabulation_table_size = 1u << (UNIV_BITS / state->num_blocks);
 
-    free(state->table);
     state->table = malloc(state->num_blocks * tabulation_table_size * sizeof(uint32_t));
 
     for (uint32_t i = 0; i < state->num_blocks; i++) {

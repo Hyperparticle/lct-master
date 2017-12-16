@@ -19,8 +19,11 @@ struct multiply_shift_state {
     uint32_t a, b;      // Random integers for multiply shift hashing
 };
 
+enum state_type { tab = 0, mul_shift = 1, naive_mod = 2 };
+
 struct hash_system {
     uint32_t hash_size; // Hash table size = 2 ^ hash_bits
+    enum state_type type;
     union {
         struct tabulation_state tabulation;
         struct multiply_shift_state multiply_shift;

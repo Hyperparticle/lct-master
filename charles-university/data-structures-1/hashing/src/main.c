@@ -6,8 +6,7 @@
  */
 
 #include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
+#include <stdlib.h>
 #include "random-gen.h"
 #include "hash-system.h"
 #include "hash-scheme.h"
@@ -16,39 +15,63 @@
 #define HASH_SIZE 20
 #define NUM_BLOCKS 4
 
-static void benchmark_random(struct hash_table table);
-static void print_usage();
+static void benchmark_random(struct hash_table table, insert_func insert);
+
+static void benchmark_sequential(enum state_type type);
 
 int main(int argc, char **argv) {
     rng_init(RANDOM_SEED);
 
-//    if (argc != 1) {
-//        print_usage();
-//    }
-//
-//    if (strcmp(argv[0], "-n") == 0) {
-//
-//    }
+    struct hash_system system;
+    struct hash_table table;
 
+    printf("RANDOM_TEST\n");
+    printf("cuckoo_tabulation\n");
+    system = tabulation_system(HASH_SIZE, NUM_BLOCKS);
+    table = hash_table_init(system, tabulate, tabulation_init);
+    benchmark_random(table, insert_cuckoo);
+    printf("\n");
 
-    printf("Tabulation-Cuckoo\n");
-    struct hash_system system = tabulation_system(HASH_SIZE, NUM_BLOCKS);
-    struct hash_table table = hash_table_init(system, tabulate, tabulation_init);
+    printf("cuckoo_multiply_shift\n");
+    system = multiply_shift_system(HASH_SIZE);
+    table = hash_table_init(system, multiply_shift, multiply_shift_init);
+    benchmark_random(table, insert_cuckoo);
+    printf("\n");
 
-//    struct hash_system system = multiply_shift_system(20);
-//    struct hash_table table = hash_table_init(system, multiply_shift, multiply_shift_init);
+    printf("linear_probing_tabulation\n");
+    system = tabulation_system(HASH_SIZE, NUM_BLOCKS);
+    table = hash_table_init(system, tabulate, tabulation_init);
+    benchmark_random(table, insert_linear_probe);
+    printf("\n");
 
-    benchmark_random(table);
+    printf("linear_probing_multiply_shift\n");
+    system = multiply_shift_system(HASH_SIZE);
+    table = hash_table_init(system, multiply_shift, multiply_shift_init);
+    benchmark_random(table, insert_linear_probe);
+    printf("\n");
 
+    printf("linear_probing_naive_modulo\n");
+    system = naive_modulo_system(HASH_SIZE);
+    table = hash_table_init(system, naive_modulo, naive_modulo_init);
+    benchmark_random(table, insert_linear_probe);
+    printf("\n");
+
+    printf("SEQUENTIAL_TEST\n");
+    printf("linear_probing_tabulation\n");
+    benchmark_sequential(tab);
+    printf("\n");
+
+    printf("linear_probing_multiply_shift\n");
+    benchmark_sequential(mul_shift);
     printf("\n");
 
     return 0;
 }
 
-static void benchmark_random(struct hash_table table) {
-    while (table.element_count < table.capacity * 99 / 100) {
+static void benchmark_random(struct hash_table table, insert_func insert) {
+    while (table.element_count < table.capacity * 9 / 10) {
         uint32_t x = random_element(table.hash_size);
-        long result = insert_cuckoo(&table, x);
+        long result = insert(&table, x);
 
         if (result < 0) {
             break;
@@ -59,7 +82,31 @@ static void benchmark_random(struct hash_table table) {
     }
 }
 
-static void print_usage() {
-    printf("Usage:\n");
-    printf("hashing [-r|-s] [-c|-l] [-t|-m|-n]\n");
+static void benchmark_sequential(enum state_type type) {
+    struct hash_system system;
+    struct hash_table table;
+
+    for (uint32_t hash_size = 15; hash_size < 30; hash_size++) {
+        system = type == tab ? tabulation_system(hash_size, NUM_BLOCKS) : multiply_shift_system(hash_size);
+        table = hash_table_init(system, multiply_shift, multiply_shift_init);
+        uint32_t element = 1;
+
+        while (table.element_count < table.capacity * 0.89) {
+            insert_linear_probe(&table, element);
+            element++;
+        }
+
+        while (table.element_count < table.capacity * 0.91) {
+            long result = insert_linear_probe(&table, element);
+            if (result > 0) {
+                printf("%d\t%lu\t\n", table.capacity, result);
+            }
+            element++;
+        }
+
+        free(table.elements);
+        if (type == tab) {
+            free(table.system->state.tabulation.table);
+        }
+    }
 }

@@ -1,4 +1,6 @@
 (NF < 2) {
+    if (n > 0) print (sum1 / n)"\t"(sum2 / n);
+    sum1 = sum2 = n = 0;
     print $1
 }
 

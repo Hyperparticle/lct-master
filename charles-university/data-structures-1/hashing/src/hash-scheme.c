@@ -10,6 +10,7 @@
 #include "hash-scheme.h"
 
 #define MAX_REHASHES 4
+#define MAX_ACCESSES 50000
 
 static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes);
 
@@ -119,6 +120,10 @@ long insert_linear_probe(struct hash_table *table, uint32_t x) {
     while (table->elements[pos] != 0 && table->elements[pos] != x) {
         pos = (pos + 1) % table->capacity;
         accesses++;
+
+        if (accesses > MAX_ACCESSES) {
+            return -1;
+        }
     }
 
     table->elements[pos] = x;

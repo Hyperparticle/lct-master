@@ -21,6 +21,8 @@ struct hash_table {
     rebuild_func rebuild;
 };
 
+typedef long (*insert_func)(struct hash_table *, uint32_t x);
+
 struct hash_table hash_table_init(struct hash_system system, hash_func hash, rebuild_func rebuild);
 
 long insert_cuckoo(struct hash_table *table, uint32_t x);

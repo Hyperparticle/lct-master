@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <stdbool.h>
+#include <time.h>
 #include "random-gen.h"
 #include "hash-system.h"
 #include "hash-scheme.h"
@@ -98,13 +99,16 @@ int main(int argc, char **argv) {
 static void benchmark_random(struct hash_table table, insert_func insert) {
     while (table.element_count < table.capacity * 99 / 100) {
         uint32_t x = random_element();
+
+        clock_t begin = clock();
         long result = insert(&table, x);
+        clock_t end = clock();
 
         if (result < 0) {
             break;
         } else if (result != 0) { // Don't print duplicates
             double alpha = load_factor(table);
-            printf("%lu\t%f\n", result, alpha);
+            printf("%lu\t%f\t%f\n", result, alpha, (double) (end - begin) / CLOCKS_PER_SEC);
         }
     }
 }

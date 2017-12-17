@@ -108,7 +108,7 @@ static void benchmark_random(struct hash_table table, insert_func insert) {
             break;
         } else if (result != 0) { // Don't print duplicates
             double alpha = load_factor(table);
-            printf("%lu\t%f\t%f\n", result, alpha, (double) (end - begin) / CLOCKS_PER_SEC);
+            printf("%f\t%lu\t%f\n", alpha, result, (double) (end - begin) / CLOCKS_PER_SEC);
         }
     }
 }

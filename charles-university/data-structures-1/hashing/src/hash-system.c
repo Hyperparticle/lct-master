@@ -85,6 +85,6 @@ uint32_t naive_modulo(struct hash_system *system, uint32_t x) {
     return x >> (UNIV_BITS - system->hash_size);
 }
 
-uint32_t random_element(uint32_t hash_size) {
-    return (uint32_t) rng_next() >> (UNIV_BITS - hash_size);
+uint32_t random_element() {
+    return (uint32_t) rng_next();
 }

@@ -96,8 +96,8 @@ int main(int argc, char **argv) {
 }
 
 static void benchmark_random(struct hash_table table, insert_func insert) {
-    while (table.element_count < table.capacity * 9 / 10) {
-        uint32_t x = random_element(table.hash_size);
+    while (table.element_count < table.capacity * 99 / 100) {
+        uint32_t x = random_element();
         long result = insert(&table, x);
 
         if (result < 0) {

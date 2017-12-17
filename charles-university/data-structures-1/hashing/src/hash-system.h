@@ -54,6 +54,6 @@ void naive_modulo_init(struct hash_system *system);
 
 uint32_t naive_modulo(struct hash_system *system, uint32_t x);
 
-uint32_t random_element(uint32_t hash_size);
+uint32_t random_element();
 
 #endif //HASHING_HASH_SYSTEM_H

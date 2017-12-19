@@ -16,7 +16,7 @@ struct tabulation_state {
 };
 
 struct multiply_shift_state {
-    uint32_t a, b;      // Random integers for multiply shift hashing
+    uint32_t a;      // Random integers for multiply shift hashing
 };
 
 enum state_type {

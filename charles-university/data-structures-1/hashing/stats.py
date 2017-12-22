@@ -24,4 +24,4 @@ for m in counts:
     med_stats = np.median(counts[m])
     decile_stats = np.percentile(counts[m], 90)
 
-    print(m, min_stats, max_stats, avg_stats, med_stats, decile_stats)
+    print(m, min_stats, max_stats, avg_stats, med_stats, decile_stats, sep='\t')

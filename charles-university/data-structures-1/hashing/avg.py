@@ -19,4 +19,4 @@ for chunk in split(lines, 100):
             sum3 += float(time)
         else:
             print(line)
-    print(sum1 / len(chunk), sum2 / len(chunk), sum3 / len(chunk))
+    print(sum1 / len(chunk), sum2 / len(chunk), sum3 / len(chunk), sep='\t')

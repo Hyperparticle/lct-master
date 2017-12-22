@@ -113,12 +113,43 @@ static void benchmark_random(struct hash_table table, insert_func insert) {
     }
 }
 
+//static void benchmark_random(struct hash_table table, insert_func insert) {
+//    uint32_t threshold = table.capacity * 99 / 100;
+//    uint32_t runs = 100;
+//
+//    bool full = false;
+//    while (table.element_count < threshold && !full) {
+//        double result_sum = 0, load_factor_sum = 0, result_count = 0;
+//
+//        clock_t begin = clock();
+//        while (result_count < runs && table.element_count < threshold) {
+//            uint32_t x = random_element();
+//            long result = insert(&table, x);
+//
+//            if (result < 0) {
+//                full = true;
+//                break;
+//            } else if (result > 0) {
+//                result_count++;
+//                load_factor_sum += load_factor(table);
+//                result_sum += result;
+//            }
+//        }
+//        clock_t end = clock();
+//
+//        double alpha = load_factor_sum / result_count;
+//        double result = result_sum / result_count;
+//        double time  = (double) (end - begin) * 1e9 / CLOCKS_PER_SEC / result_count;
+//        printf("%f\t%f\t%f\n", alpha, result, time);
+//    }
+//}
+
 static void benchmark_sequential(enum state_type type) {
     struct hash_system system;
     struct hash_table table;
 
-    for (int run = 0; run < 5; run++) {
-        for (uint32_t hash_size = 15; hash_size < 30; hash_size++) {
+    for (int run = 0; run < 20; run++) {
+        for (uint32_t hash_size = 10; hash_size < 31; hash_size++) {
             if (type == tab) {
                 system = tabulation_system(hash_size, NUM_BLOCKS);
                 table = hash_table_init(system, tabulate, tabulation_init);

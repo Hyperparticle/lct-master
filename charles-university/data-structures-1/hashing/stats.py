@@ -15,9 +15,9 @@ for line in sys.stdin:
     else:
         print(line)
 
-print('m', 'min', 'max', 'avg', 'median', 'decile')
+print('m', 'min', 'max', 'avg', 'median', 'decile', sep='\t')
 
-for m in counts:
+for m in sorted(counts):
     min_stats = np.min(counts[m])
     max_stats = np.max(counts[m])
     avg_stats = np.average(counts[m])

@@ -31,6 +31,7 @@ int main(int argc, char **argv) {
     hash_func hash = tabulate;
     rebuild_func rebuild = tabulation_init;
 
+    // Read command-line switches
     if (argc > 1) {
         for (int i = 0; i < strlen(argv[1]); i++) {
             switch (argv[1][i]) {
@@ -72,6 +73,7 @@ int main(int argc, char **argv) {
     rng_init(RANDOM_SEED);
 
     if (random) {
+        // Random test
         char *insert_type = cuckoo ? "cuckoo" : "linear_probing";
         char *system_type = type == tab ? "tabulation" : type == mul_shift ? "multiply_shift" : "naive_modulo";
         printf("random,%s,%s\n", insert_type, system_type);
@@ -89,6 +91,7 @@ int main(int argc, char **argv) {
         struct hash_table table = hash_table_init(system, hash, rebuild);
         benchmark_random(table, insert);
     } else {
+        // Sequential test
         printf("sequential,linear_probing,%s\n", type == tab ? "tabulation" : "multiply_shift");
         benchmark_sequential(type);
     }
@@ -97,59 +100,43 @@ int main(int argc, char **argv) {
 }
 
 static void benchmark_random(struct hash_table table, insert_func insert) {
-    while (table.element_count < table.capacity * 99 / 100) {
-        uint32_t x = random_element();
+    uint32_t max_capacity = table.capacity * 99 / 100;
+    uint32_t runs = 2048;
+    bool done = false;
 
-        clock_t begin = clock();
-        long result = insert(&table, x);
+    while (table.element_count < max_capacity) {
+        uint32_t result_sum = 0;
+
+        clock_t begin = clock(); // TODO: more accurate clock
+        for (int i = 0; i < runs; i++) {
+            uint32_t x = random_element();
+            long result = insert(&table, x);
+            if (result < 0) {
+                done = true;
+                break;
+            }
+            result_sum += result;
+        }
         clock_t end = clock();
 
-        if (result < 0) {
+        if (done) {
             break;
-        } else if (result != 0) { // Don't print duplicates
-            double alpha = load_factor(table);
-            printf("%f\t%lu\t%f\n", alpha, result, (double) (end - begin) * 1e9 / CLOCKS_PER_SEC);
         }
+
+        // Average results over runs
+        double alpha = load_factor(table) - (double) runs / (2 * table.capacity);
+        double result = (double) result_sum / runs;
+        double time = (double) (end - begin) * 1e9 / CLOCKS_PER_SEC / runs;
+        printf("%f\t%f\t%f\n", alpha, result, time);
     }
 }
-
-//static void benchmark_random(struct hash_table table, insert_func insert) {
-//    uint32_t threshold = table.capacity * 99 / 100;
-//    uint32_t runs = 100;
-//
-//    bool full = false;
-//    while (table.element_count < threshold && !full) {
-//        double result_sum = 0, load_factor_sum = 0, result_count = 0;
-//
-//        clock_t begin = clock();
-//        while (result_count < runs && table.element_count < threshold) {
-//            uint32_t x = random_element();
-//            long result = insert(&table, x);
-//
-//            if (result < 0) {
-//                full = true;
-//                break;
-//            } else if (result > 0) {
-//                result_count++;
-//                load_factor_sum += load_factor(table);
-//                result_sum += result;
-//            }
-//        }
-//        clock_t end = clock();
-//
-//        double alpha = load_factor_sum / result_count;
-//        double result = result_sum / result_count;
-//        double time  = (double) (end - begin) * 1e9 / CLOCKS_PER_SEC / result_count;
-//        printf("%f\t%f\t%f\n", alpha, result, time);
-//    }
-//}
 
 static void benchmark_sequential(enum state_type type) {
     struct hash_system system;
     struct hash_table table;
 
     for (int run = 0; run < 20; run++) {
-        for (uint32_t hash_size = 10; hash_size < 31; hash_size++) {
+        for (uint32_t hash_size = 10; hash_size < 32; hash_size++) {
             if (type == tab) {
                 system = tabulation_system(hash_size, NUM_BLOCKS);
                 table = hash_table_init(system, tabulate, tabulation_init);

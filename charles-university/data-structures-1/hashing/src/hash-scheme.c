@@ -9,9 +9,6 @@
 #include <stdbool.h>
 #include "hash-scheme.h"
 
-#define MAX_REHASHES 4
-#define MAX_ACCESSES 50000
-
 static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes);
 
 static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *rehashes);
@@ -37,25 +34,18 @@ struct hash_table hash_table_init(struct hash_system system, hash_func hash, reb
 
 long insert_cuckoo(struct hash_table *table, uint32_t x) {
     uint32_t rehashes = 0;
-
-    // Check for duplicates
-    uint32_t pos0 = table->hash(&table->system[0], x);
-    uint32_t pos1 = table->hash(&table->system[1], x);
-    if (table->elements[pos0] == x || table->elements[pos1] == x) {
-        return 0;
-    }
-
     return insert_cuckoo_rec(table, x, &rehashes);
 }
 
 static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *rehashes) {
-    if (*rehashes > MAX_REHASHES) { return -1; }
+    if (*rehashes > table->hash_size) { return -1; }
 
     long accesses = 0;
 
     uint32_t pos = table->hash(&table->system[0], x);
     uint32_t pos2 = table->hash(&table->system[1], x);
 
+    // Check for duplicates
     if (table->elements[pos] == x || table->elements[pos2] == x) {
         return accesses;
     }
@@ -82,12 +72,12 @@ static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *re
     accesses += rebuild_cuckoo(table, rehashes);
     accesses += insert_cuckoo_rec(table, x, rehashes);
 
-    if (*rehashes > MAX_REHASHES) { return -1; }
+    if (*rehashes > table->hash_size) { return -1; }
     return accesses;
 }
 
 static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes) {
-    if (*rehashes > MAX_REHASHES) { return -1; }
+    if (*rehashes > table->hash_size) { return -1; }
 
     long accesses = 0;
 
@@ -98,7 +88,7 @@ static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes) {
     new_table.rebuild(&new_table.system[0]);
     new_table.rebuild(&new_table.system[1]);
 
-    for (uint32_t i = 0; i < table->capacity; i++) {
+    for (uint32_t i = 0; i < table->capacity && *rehashes <= table->hash_size; i++) {
         uint32_t element = table->elements[i];
         if (element != 0) {
             accesses += insert_cuckoo_rec(&new_table, element, rehashes);
@@ -109,7 +99,7 @@ static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes) {
     free(old_tabulation_table);
     *table = new_table;
 
-    if (*rehashes > MAX_REHASHES) { return -1; }
+    if (*rehashes > table->hash_size) { return -1; }
     return accesses;
 }
 
@@ -120,10 +110,6 @@ long insert_linear_probe(struct hash_table *table, uint32_t x) {
     while (table->elements[pos] != 0 && table->elements[pos] != x) {
         pos = (pos + 1) % table->capacity;
         accesses++;
-
-        if (accesses > MAX_ACCESSES) {
-            return -1;
-        }
     }
 
     table->elements[pos] = x;

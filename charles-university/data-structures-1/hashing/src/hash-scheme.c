@@ -1,5 +1,5 @@
 /**
- *
+ * Defines cuckoo and linear probing hashing schemes
  *
  * @date 12/15/17
  * @author Dan Kondratyuk
@@ -9,8 +9,10 @@
 #include <stdbool.h>
 #include "hash-scheme.h"
 
+/** Rebuilds the given hash table with new hash system parameters */
 static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes);
 
+/** General recursive function for cuckoo hash insert */
 static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *rehashes);
 
 struct hash_table hash_table_init(struct hash_system system, hash_func hash, rebuild_func rebuild) {
@@ -67,7 +69,7 @@ static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *re
         pos = table->hash(&table->system[h0 ? 1 : 0], x);
     }
 
-    // Rebuild table
+    // Rebuild table and insert element
     *rehashes += 1;
     accesses += rebuild_cuckoo(table, rehashes);
     accesses += insert_cuckoo_rec(table, x, rehashes);

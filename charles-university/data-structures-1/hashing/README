@@ -1,0 +1,38 @@
+# Hashing
+
+The following program implements several hashing systems and schemes and benchmarks their performance in random/sequential case studies.
+
+- Homework 4 Specification - https://kam.mff.cuni.cz/~ds1/hw/4-hashing/problem.html
+- Basic Rules - https://kam.mff.cuni.cz/~ds1/hw/rules.html
+
+## Project Structure
+
+- README          - This file
+- Makefile        - Builds the programs
+- main.c          - Main program execution and benchmarking
+- hash-scheme.c/h - Defines cuckoo and linear probing hashing schemes
+- hash-system.c/h - Defines tabulation, multiply-shift, and naive modulo hashing systems
+- random-gen.c/h  - Generates random 64-bit integers
+- testrandom.sh     - Runs all random tests and prints results
+- testsequential.sh - Runs all sequential tests and prints results
+
+## Building and Running
+
+### Prerequisites:
+- gcc/g++
+- make
+
+### To Build:
+
+$ make
+
+Run all tests with:
+
+$ bash ./testrandom.sh
+$ bash ./testsequential.sh
+
+### To Clean:
+
+$ make clean
+
+

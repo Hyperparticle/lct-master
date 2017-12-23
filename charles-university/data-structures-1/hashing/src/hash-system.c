@@ -1,5 +1,5 @@
 /**
- *
+ * Defines tabulation, multiply-shift, and naive modulo hashing systems
  *
  * @date 12/15/17
  * @author Dan Kondratyuk

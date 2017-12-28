@@ -14,6 +14,6 @@ set(SOURCE_FILES
     src/hash-system.h
     src/main.c
     src/random-gen.c
-    src/random-gen.h)
+    src/random-gen.h src/clock.c src/clock.h)
 
 add_executable(hashing ${SOURCE_FILES})

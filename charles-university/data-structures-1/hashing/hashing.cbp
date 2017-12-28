@@ -8,98 +8,100 @@
 		<Option virtualFolders="CMake Files\;"/>
 		<Build>
 			<Target title="all">
-				<Option working_dir="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing"/>
+				<Option working_dir="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing"/>
 				<Option type="4"/>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 all"/>
-					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="rebuild_cache">
-				<Option working_dir="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing"/>
+				<Option working_dir="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing"/>
 				<Option type="4"/>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
-					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="edit_cache">
-				<Option working_dir="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing"/>
+				<Option working_dir="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing"/>
 				<Option type="4"/>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 edit_cache"/>
-					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="hashing">
-				<Option output="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/hashing" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing"/>
+				<Option output="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/hashing.exe" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing"/>
 				<Option object_output="./"/>
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/6/include"/>
-					<Add directory="/usr/local/include"/>
-					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/6/include-fixed"/>
-					<Add directory="/usr/include/x86_64-linux-gnu"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-cygwin/6.4.0/include"/>
 					<Add directory="/usr/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-cygwin/6.4.0/../../../../lib/../include/w32api"/>
 				</Compiler>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 hashing"/>
-					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 hashing"/>
+					<CompileFile command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="hashing/fast">
-				<Option output="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/hashing" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing"/>
+				<Option output="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/hashing.exe" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing"/>
 				<Option object_output="./"/>
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/6/include"/>
-					<Add directory="/usr/local/include"/>
-					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/6/include-fixed"/>
-					<Add directory="/usr/include/x86_64-linux-gnu"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-cygwin/6.4.0/include"/>
 					<Add directory="/usr/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-cygwin/6.4.0/../../../../lib/../include/w32api"/>
 				</Compiler>
 				<MakeCommands>
-					<Build command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 hashing/fast"/>
-					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -j8 -f &quot;/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 hashing/fast"/>
+					<CompileFile command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make.exe -j4 -f &quot;/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 		</Build>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/hash-scheme.c">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/clock.c">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/hash-scheme.h">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/clock.h">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/hash-system.c">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/hash-scheme.c">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/hash-system.h">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/hash-scheme.h">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/main.c">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/hash-system.c">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/random-gen.c">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/hash-system.h">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/src/random-gen.h">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/main.c">
 			<Option target="hashing"/>
 		</Unit>
-		<Unit filename="/home/hyper/Documents/drive/code/lct-master/charles-university/data-structures-1/hashing/CMakeLists.txt">
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/random-gen.c">
+			<Option target="hashing"/>
+		</Unit>
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/src/random-gen.h">
+			<Option target="hashing"/>
+		</Unit>
+		<Unit filename="/cygdrive/c/Users/hyper/Documents/repos/lct-master/charles-university/data-structures-1/hashing/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>
 		</Unit>
 	</Project>

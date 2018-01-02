@@ -1,0 +1,17 @@
+#!/usr/bin/perl
+use encoding "utf8";
+
+$j=1;
+print "#!MLF!#\n";
+while(<>)
+{
+ $sj=sprintf("%03d",$j);
+ $_ = uc;                            # uppercase conversion
+ s/[;,.?!]/ /g;                        # removes interpunctions
+ s/\s{1,}/ /g;                       # reduces spaces
+ s/^/\"*\/S$sj.lab\"\n/g;       # inserts sentence identifier
+ s/\s/\n/g;                           # new line between every word
+ print $_,".\n";                   # prints words
+
+ $j=$j+1;
+}

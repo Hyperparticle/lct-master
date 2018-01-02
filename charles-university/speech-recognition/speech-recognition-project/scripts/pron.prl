@@ -1,0 +1,32 @@
+#!/usr/bin/perl
+use encoding "utf8";
+
+while(<>)
+   { #some example rules for Spanish
+      s/\r?\n//; #removes newline characters
+      $word = $_;
+
+      s/GE/x e /g;
+      s/GI/x i /g;
+      s/GUE/g e /g;
+      s/GUI/g i /g;
+      s/G([AOU])/g \1 /g;
+      s/^G/g /g;
+
+      s/CE/s e /g;
+      s/CI/s i /g;
+      s/CH/tsh /g;
+#... on so on until to single letters rules:
+     s/A/a /g;
+     s/B/b /g;
+     s/C/k /g;
+
+     s/Z/s /g;
+    
+     s/$/ sp/g; #final short pause model
+
+     s/([^\sa-z])([^\s])/\1 \2 /g; #insert spaces behind rest of capitals
+     #$_=lc; # rest to lowercase
+
+     print "$word\t$_\n";
+   }

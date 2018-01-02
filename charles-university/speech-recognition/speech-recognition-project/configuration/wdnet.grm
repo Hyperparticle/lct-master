@@ -1,0 +1,13 @@
+$subj = FARMER | HORSE | BOY | GIRL | DOG | CAT;
+
+$obj = TABLE | HOUSE | PARK | POND | TREE | CHAIR;
+
+$verb = WALKED | CAME | WENT | JUMPED | RAN | STARED;
+
+$det = AN | A | THE | ANY | THIS | THAT;
+
+$prep = TO | WITH | FROM | BY | ON;
+
+$adj = HEAVY | FIRST | LONG | WHITE | NOBLE | SMALL | LARGE | OLD;
+
+( SENT-START $det [<$adj>] $subj $verb [$prep $det [<$adj>] $obj] SENT-END )

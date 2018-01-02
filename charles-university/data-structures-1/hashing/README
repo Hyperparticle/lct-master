@@ -36,5 +36,3 @@ $ bash ./testsequential.sh
 ### To Clean:
 
 $ make clean
-
-

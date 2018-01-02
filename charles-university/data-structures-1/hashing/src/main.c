@@ -138,7 +138,7 @@ static void benchmark_sequential(enum state_type type) {
     for (uint32_t hash_size = 10; hash_size < max_hash_size; hash_size++) {
         fprintf(stderr, "m = %d", hash_size);
 
-        uint32_t max_inserts = (1u << max_hash_size) - 1;
+        uint32_t max_inserts = 1u << max_hash_size;
         uint32_t num_inserts = 0;
         uint32_t num_tests = 0;
 

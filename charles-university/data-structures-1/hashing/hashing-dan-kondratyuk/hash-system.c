@@ -72,7 +72,7 @@ uint32_t tabulate(struct hash_system *system, uint32_t x) {
 
 void multiply_shift_init(struct hash_system *system) {
     struct multiply_shift_state *state = &system->state.multiply_shift;
-    state->a = (uint32_t) rng_next() | 0x1; // Random odd 32-bit integer
+    state->a = (uint32_t) rng_next() | 1u; // Random odd 32-bit integer
 }
 
 uint32_t multiply_shift(struct hash_system *system, uint32_t x) {

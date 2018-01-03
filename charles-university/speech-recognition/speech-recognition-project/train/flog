@@ -1,0 +1,49 @@
+WARNING: no script file train/dict2.ded
+
+Dictionary Usage Statistics
+---------------------------
+  Dictionary    TotalWords WordsUsed  TotalProns PronsUsed
+       dict2        40         40         40         40
+    dict-tri        40         40         40         40
+
+40 words required, 0 missing
+
+New Phone Usage Counts
+---------------------
+  1. ah    :     6
+  2. sp    :    74
+  3. ae    :     4
+  4. n     :     7
+  5. eh    :     5
+  6. iy    :     3
+  7. b     :     4
+  8. oy    :     1
+  9. ay    :     2
+ 10. k     :     4
+ 11. ey    :     2
+ 12. m     :     5
+ 13. t     :    11
+ 14. ch    :     1
+ 15. r     :     9
+ 16. d     :     4
+ 17. ao    :     5
+ 18. g     :     2
+ 19. f     :     3
+ 20. aa    :     5
+ 21. er    :     3
+ 22. s     :     6
+ 23. l     :     7
+ 24. hh    :     3
+ 25. v     :     1
+ 26. aw    :     1
+ 27. jh    :     2
+ 28. p     :     3
+ 29. ng    :     1
+ 30. ow    :     2
+ 31. sil   :     3
+ 32. dh    :     4
+ 33. ih    :     2
+ 34. uw    :     1
+ 35. w     :     4
+
+Dictionary train/dict-tri created

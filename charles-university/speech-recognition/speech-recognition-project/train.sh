@@ -2,14 +2,15 @@
 
 # Run all training steps
 # Generates word lists, phoneme translation dictionaries, MFC feature vector files from training data
-# Trains an HMM in a sequence: flat start monophones, silence model with short pauses, and forced alignment
-# Outputs final HMM to ./model/hmm9
+# Trains an HMM in a sequence: flat start monophones, silence model with short pauses, forced alignment, and triphones
+# Outputs final HMM to ./model/hmm15
 
 cd train
 
 # Clean up extraneous files
+rm -rf model/hmm*
 rm -f converted-audio/*.mfc
-rm -f sentences.txt words.mlf codestr.scp train.scp vocab.txt wlist dlog dict monophones0 monophones1 phones0.mlf phones1.mlf dict2 aligned.mlf
+rm -f sentences.txt words.mlf codestr.scp train.scp vocab.txt wlist dlog dict monophones0 monophones1 phones0.mlf phones1.mlf dict2 aligned.mlf triphones1 mktri.hed fulllist0 flog dict-tri fulllist tree.hed stats tiedlist wintri.mlf trees
 
 # Generate transcription file (words.mlf) from sentences with toMLF.prl
 cat raw-audio/raw-sentences.txt | sed -E 's/^.*\t//g' > sentences.txt
@@ -96,3 +97,46 @@ HERest -T 1 -C configuration/hmm-config -I train/aligned.mlf -t 250.0 150.0 1000
 
 mkdir -p model/hmm9
 HERest -T 1 -C configuration/hmm-config -I train/aligned.mlf -t 250.0 150.0 1000.0 -S train/train.scp -H model/hmm8/macros -H model/hmm8/hmmdefs -M model/hmm9 train/monophones1
+
+# Create a triphone transcription on the aligned sentence data (wintri.mlf)
+HLEd -A -D -T 1 -n train/triphones1 -l '*' -i train/wintri.mlf configuration/mktri.led train/aligned.mlf
+
+# Create mktri.hed file
+# When reestimating these new tied parameters the data from each of the original untied parameters is pooled so that a better estimate can be obtained. 
+julia scripts/mktrihed.jl train/monophones1 train/triphones1 train/mktri.hed
+
+# Run three more training cycles hmm10-hmm12 on triphone model
+mkdir -p model/hmm10
+HHEd -A -D -T 1 -H model/hmm9/macros -H model/hmm9/hmmdefs -M model/hmm10 train/mktri.hed train/monophones1 
+
+mkdir -p model/hmm11
+HERest  -A -D -T 1 -C configuration/hmm-config -I train/wintri.mlf -t 250.0 150.0 3000.0 -S train/train.scp -H model/hmm10/macros -H model/hmm10/hmmdefs -M model/hmm11 train/triphones1 
+
+mkdir -p model/hmm12
+HERest  -A -D -T 1 -C configuration/hmm-config -I train/wintri.mlf -t 250.0 150.0 3000.0 -s train/stats -S train/train.scp -H model/hmm11/macros -H model/hmm11/hmmdefs -M model/hmm12 train/triphones1
+
+# Make a tied-state triphone dictionary (dict-tri)
+HDMan -A -D -T 1 -b sp -n train/fulllist0 -g configuration/maketriphones.ded -l train/flog train/dict-tri train/dict2
+# HDMan -A -D -T 1 -b sp -n train/fulllist0 -g configuration/maketriphones.ded -l train/flog train/dict-tri configuration/voxforge_lexicon_dict
+
+# Append the contents of monophones0 to the beginning of to the fulllist0 file, and then to to remove any duplicate entries, and put the result in fulllist
+julia scripts/fixfulllist.jl train/fulllist0 train/monophones0 train/fulllist
+
+# Copy tree1.hed to tree.hed, append state clusters to tree.hed
+cat configuration/tree1.hed > train/tree.hed
+julia scripts/mkclscript.jl train/monophones0 train/tree.hed
+
+# Run three more training cycles hmm13-hmm15
+mkdir -p model/hmm13
+cd train
+HHEd -A -D -T 1 -H ../model/hmm12/macros -H ../model/hmm12/hmmdefs -M ../model/hmm13 tree.hed triphones1
+cd ..
+
+mkdir -p model/hmm14
+HERest -A -D -T 1 -T 1 -C configuration/hmm-config -I train/wintri.mlf  -t 250.0 150.0 3000.0 -S train/train.scp -H model/hmm13/macros -H model/hmm13/hmmdefs -M model/hmm14 train/tiedlist
+
+mkdir -p model/hmm15
+HERest -A -D -T 1 -T 1 -C configuration/hmm-config -I train/wintri.mlf  -t 250.0 150.0 3000.0 -S train/train.scp -H model/hmm14/macros -H model/hmm14/hmmdefs -M model/hmm15 train/tiedlist
+
+# Append "uw" state to end of hmmdefs
+cat model/hmm9/hmmdefs | grep -A5000 -m1 -e '~h "uw"' | sed '/~h "sil"/,//d' >> model/hmm15/hmmdefs

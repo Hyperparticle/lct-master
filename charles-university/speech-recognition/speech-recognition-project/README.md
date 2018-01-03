@@ -10,12 +10,12 @@ The following project uses the HTK toolkit to recognize speech data (i.e., trans
 Upon evaluation, the final output should be as follows:
 ```
 ====================== HTK Results Analysis =======================
-  Date: Tue Jan  2 14:30:14 2018
+  Date: Tue Jan  2 17:02:28 2018
   Ref : test/test_words.mlf
   Rec : test/recout.mlf
 ------------------------ Overall Results --------------------------
-SENT: %Correct=25.00 [H=5, S=15, N=20]
-WORD: %Corr=92.00, Acc=85.71 [H=161, D=0, S=14, I=11, N=175]
+SENT: %Correct=40.00 [H=8, S=12, N=20]
+WORD: %Corr=92.00, Acc=88.00 [H=161, D=0, S=14, I=7, N=175]
 ===================================================================
 ```
 
@@ -56,11 +56,11 @@ The command `$ ./scripts/reset.sh` will generate our training and test sentences
 
 1. Record all train/test sentences with a suitable microphone and put them in the `raw-audio` directories.
 
-2. Convert the `.m4a` files to `.wav` using `avconv` or `ffmpeg` using the script `./scripts/convert.sh` (48kHz 16bit). This will also put the `.wav` files in the `converted-audio` directories. The will be named S001.wav, S002, ...
+2. Convert the `.m4a` files to `.wav` using `avconv` or `ffmpeg` using the script `./scripts/convert.sh` (48kHz 16bit). This will also put the `.wav` files in the `converted-audio` directories. They will be named `S001.wav`, `S002.wav`, ...
 
 ### Training
 
-The command `$ bash ./train.sh` will run all necessary training steps. It first generates Generates word lists, dictionaries, and feature vector files from the training data. Then it trains an HMM in a sequence: flat start monophones, silence model with short pauses, and forced alignment. The final HMM model for testing will be outputted to `./model/hmm9`.
+The command `$ bash ./train.sh` will run all necessary training steps. It first generates Generates word lists, dictionaries, and feature vector files from the training data. Then it trains an HMM in a sequence: flat start monophones, silence model with short pauses, forced alignment, and triphones. The final HMM model for testing will be outputted to `./model/hmm15`.
 
 The training script takes the following steps (see the script itself for more detail). All generated training files are in the `train` directory.
 
@@ -72,7 +72,7 @@ The training script takes the following steps (see the script itself for more de
 
 4. Create a dictionary that translates from words to phonemes. This project uses an English lexicon provided by Voxforge (see script). A list of words `wlist` is generated and fed through the lexicon to generate a `dict` and list of monophones `monophones0` (without a short pause sp), `monophones1` (with short pause sp).
 
-5. Use script `configuration/mkphones0.led` and to create a phonetical transcription of all training sentences from `words.mlf` and output to `phones0.mlf`
+5. Use script `configuration/mkphones0.led` to create a phonetical transcription of all training sentences from `words.mlf` and output to `phones0.mlf`
 
 6. Define a prototype model in `configuration/proto` and initialize it in `hmm0` by computing the mean and variance of the training data.
 
@@ -90,7 +90,19 @@ The training script takes the following steps (see the script itself for more de
 
 13. Run forced-alignment on `hmm7` which will allow the training data to properly align states with their phonemic outputs. This will generate `aligned.mlf`.
 
-14. Run the last two training cycles `hmm8`-`hmm9` on the new aligned data.
+14. Run two more training cycles `hmm8`-`hmm9` on the new aligned data.
+
+15. Use script `configuration/mktri.led` to create a triphone transcription on the aligned sentence data and output to `wintri.mlf`, `triphones1`
+
+16. Create `mktri.hed`. When reestimating these new tied parameters the data from each of the original untied parameters is pooled so that a better estimate can be obtained. 
+
+17. Run three more training cycles `hmm10`-`hmm12` to bind monophone to triphone model
+
+18. Make a tied-state triphone dictionary `dict-tri`. Append the contents of monophones0 to the beginning of to the `fulllist0` file, and then to to remove any duplicate entries, and put the result in `fulllist`
+
+19. Copy `configuration/tree1.hed` to `tree.hed`, append state clusters to `tree.hed`
+
+20. Run three more training cycles `hmm13`-`hmm15` on the triphone model and append "uw" state to end of `hmm15/hmmdefs`
 
 ### Testing and Evaluation
 

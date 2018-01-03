@@ -19,7 +19,7 @@ WORD: %Corr=92.00, Acc=88.00 [H=161, D=0, S=14, I=7, N=175]
 ===================================================================
 ```
 
-We see words were predicted correctly 92% of the time.
+We see words were predicted correctly 92% of the time. The addition of training on triphones over just monophones shows a noticeable improvement.
 
 ## Building and Running
 

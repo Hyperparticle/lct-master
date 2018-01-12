@@ -134,15 +134,10 @@ static void benchmark_random(struct hash_table table, insert_func insert) {
 }
 
 static void benchmark_sequential(enum state_type type) {
-    uint32_t max_hash_size = 29;
-    for (uint32_t hash_size = 10; hash_size < max_hash_size; hash_size++) {
-        fprintf(stderr, "m = %d", hash_size);
+    for (uint32_t hash_size = 10; hash_size < 26; hash_size++) {
+        fprintf(stderr, "m = %d\t", hash_size);
 
-        uint32_t max_inserts = 1u << max_hash_size;
-        uint32_t num_inserts = 0;
-        uint32_t num_tests = 0;
-
-        while (num_inserts < max_inserts) {
+        for (uint32_t num_tests = 0; num_tests < 100; num_tests++) {
             struct hash_system system;
             struct hash_table table;
 
@@ -158,7 +153,6 @@ static void benchmark_sequential(enum state_type type) {
             while (table.element_count < table.capacity * 0.89) {
                 insert_linear_probe(&table, element);
                 element++;
-                num_inserts++;
             }
 
             while (table.element_count < table.capacity * 0.91) {
@@ -167,17 +161,12 @@ static void benchmark_sequential(enum state_type type) {
                     printf("%d\t%d\t%lu\n", hash_size, num_tests, result);
                 }
                 element++;
-                num_inserts++;
             }
 
             free(table.elements);
             if (type == tab) {
                 free(table.system->state.tabulation.table);
             }
-
-            num_tests++;
         }
-
-        fprintf(stderr, "\tt = %d\n", num_tests);
     }
 }

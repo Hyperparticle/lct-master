@@ -17,10 +17,10 @@ static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes);
 static long insert_cuckoo_rec(struct hash_table *table, uint32_t x, uint32_t *rehashes);
 
 struct hash_table hash_table_init(struct hash_system system, hash_func hash, rebuild_func rebuild) {
-    uint32_t capacity = 1u << system.hash_size;
+    uint32_t capacity = 1u << system.hash_size_bits;
 
     struct hash_table table = {
-            .hash_size = system.hash_size,
+            .hash_size = system.hash_size_bits,
             .capacity = capacity,
             .element_count = 0,
             .elements = calloc(capacity, sizeof(uint32_t)),
@@ -84,23 +84,16 @@ static long rebuild_cuckoo(struct hash_table *table, uint32_t *rehashes) {
 
     long accesses = 0;
 
-    struct hash_system system = table->system[0];
-    uint32_t *old_tabulation_table = system.type == tab ? system.state.tabulation.table : NULL;
-
-    struct hash_table new_table = hash_table_init(system, table->hash, table->rebuild);
-    new_table.rebuild(&new_table.system[0]);
-    new_table.rebuild(&new_table.system[1]);
+    table->rebuild(&table->system[0]);
+    table->rebuild(&table->system[1]);
 
     for (uint32_t i = 0; i < table->capacity && *rehashes <= table->hash_size; i++) {
         uint32_t element = table->elements[i];
         if (element != 0) {
-            accesses += insert_cuckoo_rec(&new_table, element, rehashes);
+            table->elements[i] = 0;
+            accesses += insert_cuckoo_rec(table, element, rehashes);
         }
     }
-
-    free(table->elements);
-    free(old_tabulation_table);
-    *table = new_table;
 
     if (*rehashes > table->hash_size) { return -1; }
     return accesses;

@@ -25,7 +25,7 @@ enum state_type {
 
 /** All necessary information to construct a generic hash system */
 struct hash_system {
-    uint32_t hash_size; // Hash table size = 2 ^ hash_bits
+    uint32_t hash_size_bits; // Hash table size = 2 ^ hash_bits
     enum state_type type;
     union {
         struct tabulation_state tabulation;

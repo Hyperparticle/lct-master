@@ -9,12 +9,12 @@
 #include "hash-system.h"
 #include "random-gen.h"
 
-#define UNIV_BITS (sizeof(uint32_t) * 8u)
-#define MASK(bits) (~(~0u << (bits)))
+#define UNIV_BITS (sizeof(uint32_t) * 8u) // 32-bit
+#define MASK(bits) (~(~0u << (bits)))     // Mask off given number of bits
 
 struct hash_system tabulation_system(uint32_t hash_size, uint32_t num_blocks) {
     struct hash_system system = {
-            .hash_size = hash_size,
+            .hash_size_bits = hash_size,
             .type = tab,
             .state.tabulation = {.num_blocks = num_blocks, .table = NULL}
     };
@@ -23,7 +23,7 @@ struct hash_system tabulation_system(uint32_t hash_size, uint32_t num_blocks) {
 
 struct hash_system multiply_shift_system(uint32_t hash_size) {
     struct hash_system system = {
-            .hash_size = hash_size,
+            .hash_size_bits = hash_size,
             .type = mul_shift,
             .state.multiply_shift = {.a = 0}
     };
@@ -32,7 +32,7 @@ struct hash_system multiply_shift_system(uint32_t hash_size) {
 
 struct hash_system naive_modulo_system(uint32_t hash_size) {
     struct hash_system system = {
-            .hash_size = hash_size,
+            .hash_size_bits = hash_size,
             .type = naive_mod,
             .state = {0}
     };
@@ -43,7 +43,7 @@ void tabulation_init(struct hash_system *system) {
     struct tabulation_state *state = &system->state.tabulation;
 
     uint32_t tabulation_table_size = 1u << (UNIV_BITS / state->num_blocks);
-    uint32_t mask = MASK(system->hash_size);
+    uint32_t mask = MASK(system->hash_size_bits);
 
     state->table = malloc(state->num_blocks * tabulation_table_size * sizeof(uint32_t));
 
@@ -77,13 +77,13 @@ void multiply_shift_init(struct hash_system *system) {
 
 uint32_t multiply_shift(struct hash_system *system, uint32_t x) {
     struct multiply_shift_state *state = &system->state.multiply_shift;
-    return (state->a * x) >> (UNIV_BITS - system->hash_size);
+    return (state->a * x) >> (UNIV_BITS - system->hash_size_bits);
 }
 
 void naive_modulo_init(struct hash_system *system) {}
 
 uint32_t naive_modulo(struct hash_system *system, uint32_t x) {
-    return x & MASK(system->hash_size);
+    return x & MASK(system->hash_size_bits);
 }
 
 uint32_t random_element() {

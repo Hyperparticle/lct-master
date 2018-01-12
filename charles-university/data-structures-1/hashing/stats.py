@@ -13,9 +13,7 @@ for line in sys.stdin:
     s = line.split()
     if len(s) == 3:
         m, t, steps = int(s[0]), int(s[1]), int(s[2])
-        if len(counts[m]) <= t:
-            counts[m].append([])
-        counts[m][t].append(steps)
+        counts[m].append(steps)
     else:
         print(line)
 

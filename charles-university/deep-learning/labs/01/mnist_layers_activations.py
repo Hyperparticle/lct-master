@@ -25,6 +25,17 @@ class Network:
             # TODO: add args.layers hidden layers with activations given by
             # args.activation and store results in hidden_layer. Possible
             # activations are none, relu, tanh and sigmoid.
+            activations = {
+                'none': None,
+                'relu': tf.nn.relu,
+                'tanh': tf.nn.tanh,
+                'sigmoid': tf.nn.sigmoid
+            }
+
+            hidden_layer = flattened_images
+            for _ in range(args.layers):
+                hidden_layer = tf.layers.dense(hidden_layer, args.hidden_layer, activation=activations[args.activation])
+
             output_layer = tf.layers.dense(hidden_layer, self.LABELS, activation=None, name="output_layer")
             self.predictions = tf.argmax(output_layer, axis=1)
 
@@ -111,4 +122,8 @@ if __name__ == "__main__":
     network.evaluate("test", mnist.test.images, mnist.test.labels)
 
     # TODO: Compute and print accuracy on the test set. Print accuracy as
-    # percentage rounded on two decimal places, i.e., 91.23
+    # percentage rounded on two decimal places, e.g., 91.23
+    with network.session.graph.as_default():
+        accuracy = tf.reduce_mean(tf.cast(tf.equal(network.labels, network.predictions), tf.float32))
+    acc = network.session.run(accuracy, {network.images: mnist.test.images, network.labels: mnist.test.labels})
+    print("{:.2f}".format(acc * 100))

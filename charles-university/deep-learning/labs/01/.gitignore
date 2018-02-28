@@ -1,0 +1,3 @@
+/logs/
+/mnist_data/
+*.gz

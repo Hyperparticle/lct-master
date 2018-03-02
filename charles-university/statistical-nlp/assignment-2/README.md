@@ -1,4 +1,4 @@
-# Assignment #2: NPFL067 Statistical NLP II)
+# Assignment #2: NPFL067 Statistical NLP II
 
 ## Words and The Company They Keep
 

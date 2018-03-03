@@ -1,12 +1,13 @@
 # https://github.com/mheilman/tan-clustering
 # https://github.com/percyliang/brown-cluster
+
 import random
 import argparse
 import glob
 import re
 import itertools
 import logging
-from collections import defaultdict
+from collections import defaultdict, Counter
 from math import log, isnan, isinf
 from tqdm import tqdm
 from scipy.special import comb
@@ -25,14 +26,8 @@ def open_text(filename):
     return [preprocess(word) for word in content]
 
 class ClassLMClusters(object):
-    def __init__(self, tokens, batch_size=1000, max_vocab_size=None,
-                 lower=False, word_cutoff=10, cluster_cutoff=0):
-
-        self.batch_size = batch_size
+    def __init__(self, tokens, word_cutoff=10, cluster_cutoff=1):
         self.tokens = tokens
-        self.lower = lower  # whether to lowercase everything
-
-        self.max_vocab_size = max_vocab_size
         self.word_cutoff = word_cutoff
         self.cluster_cutoff = cluster_cutoff
 
@@ -41,56 +36,38 @@ class ClassLMClusters(object):
         self.cluster_parents = {}
         self.cluster_counter = 0
 
-        # the list of words in the vocabulary and their counts
-        self.counts = defaultdict(int)
-        self.trans = defaultdict(lambda: defaultdict(int))
-        self.num_tokens = 0
-
-        # the graph weights (w) and the effects of merging nodes (L)
-        # (see Liang's thesis)
-        self.w = defaultdict(lambda: defaultdict(float))
-        self.L = defaultdict(lambda: defaultdict(float))
-
         # the 0/1 bit to add when walking up the hierarchy
         # from a word to the top-level cluster
         self.cluster_bits = {}
 
+        # the list of words in the vocabulary and their counts
+        self.counts = defaultdict(int)
+        self.trans = defaultdict(lambda: defaultdict(int))
+        self.num_tokens = len(self.tokens)
+
+        # the graph weights (w) and the effects of merging nodes (L) (see Liang's thesis)
+        self.w = defaultdict(lambda: defaultdict(float))
+        self.L = defaultdict(lambda: defaultdict(float))
+
         # find the most frequent words
         self.vocab = {}
         self.reverse_vocab = []
-        self.create_vocab()
-
+ 
         # create sets of documents that each word appears in
+        self.create_vocab()
         self.create_index()
 
         # make a copy of the list of words, as a queue for making new clusters
-        word_queue = list(range(len(self.vocab)))
-
-        # score potential clusters, starting with the most frequent words.
-        # also, remove the batch from the queue
-#         self.current_batch = word_queue[:(self.batch_size + 1)]
-#         word_queue = word_queue[(self.batch_size + 1):]
-        
-#         self.current_batch = word_queue
-#         word_queue = []
-        
-        self.current_batch = [word for word in word_queue if self.counts[word] >= word_cutoff]
-        print(len(word_queue), len(self.current_batch))
-        word_queue = []
+        self.classes = [word for word in list(range(len(self.vocab))) if self.counts[word] >= self.word_cutoff]
+        # self.classes = list(range(len(self.vocab)))
+        print(len(self.classes))
         
         self.initialize_tables()
 
-        with tqdm(total=len(self.current_batch) + len(word_queue) - 1, unit='class') as t:
-            while len(self.current_batch) > 1:
-                # find the best pair of words/clusters to merge
-                c1, c2 = self.find_best()
-
-                # merge the clusters in the index
-                self.merge(c1, c2)
-
-                if word_queue:
-                    new_word = word_queue.pop(0)
-                    self.add_to_batch(new_word)
+        with tqdm(total=len(self.classes) - 1, unit='class') as t:
+            while len(self.classes) > self.cluster_cutoff:
+                c1, c2 = self.find_best() # find the best pair of words/clusters to merge
+                self.merge(c1, c2) # merge the clusters in the index
 
 #                 t.update(1)
                 self.cluster_counter += 1
@@ -99,108 +76,53 @@ class ClassLMClusters(object):
                              .format(self.reverse_vocab[c1] if c1 < len(self.reverse_vocab) else c1,
                                      self.reverse_vocab[c2] if c2 < len(self.reverse_vocab) else c2,
                                      self.cluster_counter))
-                
-#                 logging.info('{} AND {} WERE MERGED INTO {}. {} REMAIN.'
-#                              .format(self.reverse_vocab[c1] if c1 < len(self.reverse_vocab) else c1,
-#                                      self.reverse_vocab[c2] if c2 < len(self.reverse_vocab) else c2,
-#                                      self.cluster_counter,
-#                                      len(self.current_batch) + len(word_queue) - 1))
+    def create_vocab(self):
+        tmp_counts = Counter(self.tokens)
+        words = sorted(tmp_counts.keys(), key=lambda w: tmp_counts[w], reverse=True)
 
-    def corpus_generator(self):
-        for tok in self.tokens:
-            yield tok
+        for i, w in enumerate(words):
+            self.vocab[w] = i
+            self.counts[self.vocab[w]] = tmp_counts[w]
+
+        self.reverse_vocab = sorted(self.vocab.keys(), key=lambda w: self.vocab[w])
+        self.cluster_counter = len(self.vocab)
 
     def create_index(self):
-        corpus_iter1, corpus_iter2 = itertools.tee(self.corpus_generator())
-
-        # increment one iterator to get consecutive tokens
-        next(corpus_iter2)
-
-        for w1, w2 in zip(corpus_iter1, corpus_iter2):
+        for w1, w2 in zip(self.tokens, self.tokens[1:]):
             if w1 in self.vocab and w2 in self.vocab:
                 self.trans[self.vocab[w1]][self.vocab[w2]] += 1
 
         logging.info('{} word tokens were processed.'.format(self.num_tokens))
 
-    def create_vocab(self):
-        tmp_counts = defaultdict(int)
-        for w in self.corpus_generator():
-            tmp_counts[w] += 1
-            self.num_tokens += 1
-
-        words = sorted(tmp_counts.keys(), key=lambda w: tmp_counts[w],
-                       reverse=True)
-
-        too_rare = 0
-        if self.max_vocab_size is not None \
-           and len(words) > self.max_vocab_size:
-            too_rare = tmp_counts[words[self.max_vocab_size]]
-            if too_rare == tmp_counts[words[0]]:
-                too_rare += 1
-                logging.info("max_vocab_size too low.  Using all words that" +
-                             " appeared > {} times.".format(too_rare))
-
-        for i, w in enumerate(w for w in words if tmp_counts[w] > too_rare):
-            self.vocab[w] = i
-            self.counts[self.vocab[w]] = tmp_counts[w]
-
-        self.reverse_vocab = sorted(self.vocab.keys(),
-                                    key=lambda w: self.vocab[w])
-        self.cluster_counter = len(self.vocab)
-
     def initialize_tables(self):
         logging.info("initializing tables")
 
         # edges between nodes
-        total = 0
-        for c1, c2 in itertools.combinations(self.current_batch, 2):
-            w = self.compute_weight([c1], [c2]) \
-                + self.compute_weight([c2], [c1])
-            if w:
-                self.w[c1][c2] = w
-                total += w
+        for c1, c2 in itertools.combinations(self.classes, 2):
+            self.w[c1][c2] = self.compute_weight([c1], [c2]) + self.compute_weight([c2], [c1])
 
         # edges to and from a single node
-        for c in self.current_batch:
-            w = self.compute_weight([c], [c])
-            if w:
-                self.w[c][c] = w
-                total += w
+        for c in self.classes:
+            self.w[c][c] = self.compute_weight([c], [c])
         
-        print(total)
+        print(sum(self.w[c1][c2] for c1 in self.w for c2 in self.w[c1]))
 
-        with tqdm(total=comb(len(self.current_batch), 2, exact=True), unit='pairs') as t:
-            num_pairs = 0
-            for c1, c2 in itertools.combinations(self.current_batch, 2):
-                self.compute_L(c1, c2)
-                num_pairs += 1
-                t.update(1)
-#                     logging.info("{} pairs precomputed".format(num_pairs))
+        # classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
+        classes = self.classes
+        total = comb(len(classes), 2, exact=True)
+        for c1, c2 in tqdm(itertools.combinations(classes, 2), total=total, unit='pairs'):
+            self.compute_L(c1, c2)
 
     def compute_weight(self, nodes1, nodes2):
-        paircount = 0
-        for n1 in nodes1:
-            for n2 in nodes2:
-                paircount += self.trans[n1][n2]
+        paircount = sum(self.trans[n1][n2] for n1 in nodes1 for n2 in nodes2)
 
         if not paircount:
             return 0.0
 
-        count_1 = 0
-        count_2 = 0
-        for n in nodes1:
-            count_1 += self.counts[n]
-        for n in nodes2:
-            count_2 += self.counts[n]
+        count_1 = sum(self.counts[n] for n in nodes1)
+        count_2 = sum(self.counts[n] for n in nodes2)
 
-        # convert to floats
-        num_tokens = float(self.num_tokens)
-        paircount = float(paircount)
-        count_1 = float(count_1)
-        count_2 = float(count_2)
-
-        return (paircount / num_tokens) \
-               * log(paircount * num_tokens / count_1 / count_2, 2)
+        return (paircount / self.num_tokens) * log(paircount * self.num_tokens / count_1 / count_2, 2)
 
     def compute_L(self, c1, c2):
         val = 0.0
@@ -208,7 +130,7 @@ class ClassLMClusters(object):
         # add the weight of edges coming in to the potential
         # new cluster from other nodes
         # TODO this is slow
-        for d in self.current_batch:
+        for d in self.classes:
             val += self.compute_weight([c1, c2], [d])
             val += self.compute_weight([d], [c1, c2])
 
@@ -223,7 +145,7 @@ class ClassLMClusters(object):
 
         # subtract the weight of edges to/from c1, c2
         # (which would be removed)
-        for d in self.current_batch:
+        for d in self.classes:
             for c in [c1, c2]:
                 if d in self.w[c]:
                     val -= self.w[c][d]
@@ -306,15 +228,15 @@ class ClassLMClusters(object):
                 del table[c2]
 
         # remove the merged items
-        self.current_batch.remove(c1)
-        self.current_batch.remove(c2)
+        self.classes.remove(c1)
+        self.classes.remove(c2)
 
         # add the new cluster to the w and L tables
         self.add_to_batch(c_new)
 
     def add_to_batch(self, c_new):
         # compute weights for edges connected to the new node
-        for d in self.current_batch:
+        for d in self.classes:
             self.w[d][c_new] = self.compute_weight([d], [c_new])
             self.w[d][c_new] = self.compute_weight([c_new], [d])
         self.w[c_new][c_new] = self.compute_weight([c_new], [c_new])
@@ -327,11 +249,11 @@ class ClassLMClusters(object):
                 self.L[d1][d2] += self.compute_weight([c_new], [d1, d2])
 
         # compute scores for merging it with all clusters in the current batch
-        for d in self.current_batch:
+        for d in self.classes:
             self.compute_L(d, c_new)
 
         # now add it to the batch
-        self.current_batch.append(c_new)
+        self.classes.append(c_new)
 
     def get_bitstring(self, w):
         # walk up the cluster hierarchy until there is no parent cluster

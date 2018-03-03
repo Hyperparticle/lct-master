@@ -1,6 +1,6 @@
 #  Makefile for Transformation Rule-based Part of Speech Tagger
 
-SHELL = /bin/sh
+SHELL = /bin/bash
 RM    = /bin/rm -f
 
 #HOMEDIR  = .

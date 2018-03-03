@@ -12,8 +12,8 @@ PATENTS, COPYRIGHTS, TRADEMARKS OR OTHER RIGHTS.   */
 #include <string.h>
 #include <unistd.h>
 #include "useful.h"
-#define START_PROG "start-state-tagger"
-#define END_PROG "final-state-tagger"
+#define START_PROG "./start-state-tagger"
+#define END_PROG "./final-state-tagger"
   
 
 main(argc, argv)

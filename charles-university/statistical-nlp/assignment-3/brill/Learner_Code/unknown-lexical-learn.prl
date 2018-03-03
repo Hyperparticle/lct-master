@@ -34,7 +34,7 @@
 # change this line to change the cut-off threshold for rule learning.  
 # a threshold of 3 means that learning will halt when no rules can be 
 # found whose score is at least 3.
-$THRESHOLD = 3;
+$THRESHOLD = 6;
 
 # keeps track of events where adding a suffix results in a word
 sub ssubforadd {

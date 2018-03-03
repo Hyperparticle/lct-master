@@ -16,16 +16,7 @@ random.seed(100)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s\t%(message)s')
 
-def open_text(filename):
-    """Reads a text line by line, applies light preprocessing, and returns an array of words"""
-    with open(filename, encoding='iso-8859-2') as f:
-        content = f.readlines()
-    
-    preprocess = lambda word: word.strip()
-    
-    return [preprocess(word) for word in content]
-
-class ClassLMClusters(object):
+class LmCluster(object):
     def __init__(self, tokens, word_cutoff=10, cluster_cutoff=1):
         self.tokens = tokens
         self.word_cutoff = word_cutoff
@@ -35,6 +26,7 @@ class ClassLMClusters(object):
         # to keep track of the hierarchy
         self.cluster_parents = {}
         self.cluster_counter = 0
+        self.cluster_history = []
 
         # the 0/1 bit to add when walking up the hierarchy
         # from a word to the top-level cluster
@@ -60,22 +52,24 @@ class ClassLMClusters(object):
         # make a copy of the list of words, as a queue for making new clusters
         self.classes = [word for word in list(range(len(self.vocab))) if self.counts[word] >= self.word_cutoff]
         # self.classes = list(range(len(self.vocab)))
-        print(len(self.classes))
+        logging.info('Starting classes: ' + str(len(self.classes)))
         
         self.initialize_tables()
 
-        with tqdm(total=len(self.classes) - 1, unit='class') as t:
+        with tqdm(total=len(self.classes) - self.cluster_cutoff, unit='class') as t:
             while len(self.classes) > self.cluster_cutoff:
                 c1, c2 = self.find_best() # find the best pair of words/clusters to merge
-                self.merge(c1, c2) # merge the clusters in the index
+                c_new = self.merge(c1, c2) # merge the clusters in the index
 
-#                 t.update(1)
                 self.cluster_counter += 1
+                t.update(1)
 
-                logging.info('{0: <10} + {1: <10} -> {2: <10}'
-                             .format(self.reverse_vocab[c1] if c1 < len(self.reverse_vocab) else c1,
-                                     self.reverse_vocab[c2] if c2 < len(self.reverse_vocab) else c2,
-                                     self.cluster_counter))
+                c1 = self.reverse_vocab[c1] if c1 < len(self.reverse_vocab) else c1
+                c2 = self.reverse_vocab[c2] if c2 < len(self.reverse_vocab) else c2
+                self.cluster_history.append((c1, c2, c_new))
+
+                # logging.info('{0: <10} + {1: <10} -> {2: <10}'.format(c1, c2, self.cluster_counter))
+
     def create_vocab(self):
         tmp_counts = Counter(self.tokens)
         words = sorted(tmp_counts.keys(), key=lambda w: tmp_counts[w], reverse=True)
@@ -105,7 +99,7 @@ class ClassLMClusters(object):
         for c in self.classes:
             self.w[c][c] = self.compute_weight([c], [c])
         
-        print(sum(self.w[c1][c2] for c1 in self.w for c2 in self.w[c1]))
+        # print(sum(self.w[c1][c2] for c1 in self.w for c2 in self.w[c1]))
 
         # classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
         classes = self.classes
@@ -127,10 +121,13 @@ class ClassLMClusters(object):
     def compute_L(self, c1, c2):
         val = 0.0
 
+        # classes = classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
+        classes = self.classes
+
         # add the weight of edges coming in to the potential
         # new cluster from other nodes
         # TODO this is slow
-        for d in self.classes:
+        for d in classes:
             val += self.compute_weight([c1, c2], [d])
             val += self.compute_weight([d], [c1, c2])
 
@@ -145,7 +142,7 @@ class ClassLMClusters(object):
 
         # subtract the weight of edges to/from c1, c2
         # (which would be removed)
-        for d in self.classes:
+        for d in classes:
             for c in [c1, c2]:
                 if d in self.w[c]:
                     val -= self.w[c][d]
@@ -234,6 +231,8 @@ class ClassLMClusters(object):
         # add the new cluster to the w and L tables
         self.add_to_batch(c_new)
 
+        return c_new
+
     def add_to_batch(self, c_new):
         # compute weights for edges connected to the new node
         for d in self.classes:
@@ -274,7 +273,17 @@ class ClassLMClusters(object):
         for w in self.vocab:
             print("{}\t{}\t{}".format(w, self.get_bitstring(w), self.counts[self.vocab[w]]))
 
-english = './TEXTEN1.txt'
-words = open_text(english)
+def open_text(filename):
+    """Reads a text line by line, applies light preprocessing, and returns an array of words"""
+    with open(filename, encoding='iso-8859-2') as f:
+        content = f.readlines()
+    
+    preprocess = lambda word: word.strip()
+    
+    return [preprocess(word) for word in content]
 
-c = ClassLMClusters(['<s>'] + words[:8000])
+if __name__ == '__main__': 
+    english = './TEXTEN1.txt'
+    words = open_text(english)
+
+    c = LmCluster(words[:8000])

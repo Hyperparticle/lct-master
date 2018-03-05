@@ -22,7 +22,7 @@ class Network:
 
             # Computation
             flattened_images = tf.layers.flatten(self.images, name="flatten")
-            # TODO: add args.layers hidden layers with activations given by
+            # add args.layers hidden layers with activations given by
             # args.activation and store results in hidden_layer. Possible
             # activations are none, relu, tanh and sigmoid.
             activations = {
@@ -45,7 +45,7 @@ class Network:
             self.training = tf.train.GradientDescentOptimizer(0.03).minimize(loss, global_step=global_step, name="training")
 
             # Summaries
-            accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
+            self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
             confusion_matrix = tf.reshape(tf.confusion_matrix(self.labels, self.predictions,
                                                               weights=tf.not_equal(self.labels, self.predictions), dtype=tf.float32),
                                           [1, self.LABELS, self.LABELS, 1])
@@ -54,10 +54,10 @@ class Network:
             self.summaries = {}
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(100):
                 self.summaries["train"] = [tf.contrib.summary.scalar("train/loss", loss),
-                                           tf.contrib.summary.scalar("train/accuracy", accuracy)]
+                                           tf.contrib.summary.scalar("train/accuracy", self.accuracy)]
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
                 for dataset in ["dev", "test"]:
-                    self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/accuracy", accuracy),
+                    self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/accuracy", self.accuracy),
                                                tf.contrib.summary.image(dataset + "/confusion_matrix", confusion_matrix)]
 
             # Initialize variables
@@ -121,9 +121,7 @@ if __name__ == "__main__":
         network.evaluate("dev", mnist.validation.images, mnist.validation.labels)
     network.evaluate("test", mnist.test.images, mnist.test.labels)
 
-    # TODO: Compute and print accuracy on the test set. Print accuracy as
+    # Compute and print accuracy on the test set. Print accuracy as
     # percentage rounded on two decimal places, e.g., 91.23
-    with network.session.graph.as_default():
-        accuracy = tf.reduce_mean(tf.cast(tf.equal(network.labels, network.predictions), tf.float32))
-    acc = network.session.run(accuracy, {network.images: mnist.test.images, network.labels: mnist.test.labels})
+    acc = network.session.run(network.accuracy, {network.images: mnist.test.images, network.labels: mnist.test.labels})
     print("{:.2f}".format(acc * 100))

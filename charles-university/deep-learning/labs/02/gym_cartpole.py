@@ -20,12 +20,9 @@ class Network:
 
             # Define the model, with the output layers for actions in `output_layer`
             hidden_layer = self.observations
-            hidden_layer = tf.layers.dense(hidden_layer, 70, activation=tf.nn.relu)
-            hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=0.85)
-            hidden_layer = tf.layers.dense(hidden_layer, 60, activation=tf.nn.relu)
-            hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=0.85)
-            hidden_layer = tf.layers.dense(hidden_layer, 70, activation=tf.nn.relu)
-            hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=0.85)
+            for _ in range(args.num_dense_layers):
+                hidden_layer = tf.layers.dense(hidden_layer, args.num_dense_nodes, activation=tf.nn.relu)
+                hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=args.dropout)
 
             output_layer = tf.layers.dense(hidden_layer, self.ACTIONS, activation=None, name="output_layer")
             self.predictions = tf.argmax(output_layer, axis=1)
@@ -35,7 +32,7 @@ class Network:
             # Global step
             loss = tf.losses.sparse_softmax_cross_entropy(self.labels, output_layer, scope="loss")
             global_step = tf.train.create_global_step()
-            self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
+            self.training = tf.train.AdamOptimizer(learning_rate=args.learning_rate).minimize(loss, global_step=global_step, name="training")
 
             # Summaries
             accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.actions), tf.float32))
@@ -75,6 +72,12 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
+
+    args.learning_rate = 9.9e-4
+    args.num_dense_layers = 1
+    args.num_dense_nodes = 178
+    args.epochs = 171
+    args.dropout = 1.0
 
     # Create logdir name
     args.logdir = "logs/{}-{}-{}".format(

@@ -18,7 +18,17 @@ class Network:
             self.observations = tf.placeholder(tf.float32, [None, self.OBSERVATIONS], name="observations")
             self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            # TODO: Define the model, with the output layers for actions in `output_layer`
+            # Define the model, with the output layers for actions in `output_layer`
+            hidden_layer = self.observations
+            hidden_layer = tf.layers.dense(hidden_layer, 70, activation=tf.nn.relu)
+            hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=0.85)
+            hidden_layer = tf.layers.dense(hidden_layer, 60, activation=tf.nn.relu)
+            hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=0.85)
+            hidden_layer = tf.layers.dense(hidden_layer, 70, activation=tf.nn.relu)
+            hidden_layer = tf.nn.dropout(hidden_layer, keep_prob=0.85)
+
+            output_layer = tf.layers.dense(hidden_layer, self.ACTIONS, activation=None, name="output_layer")
+            self.predictions = tf.argmax(output_layer, axis=1)
 
             self.actions = tf.argmax(output_layer, axis=1, name="actions")
 
@@ -89,7 +99,8 @@ if __name__ == "__main__":
 
     # Train
     for i in range(args.epochs):
-        # TODO: Train for an epoch
+        # Train for an epoch
+        network.train(observations, labels)
 
     # Save the network
     network.save("gym_cartpole/model")

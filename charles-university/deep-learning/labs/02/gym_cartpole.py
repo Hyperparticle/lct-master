@@ -73,11 +73,11 @@ if __name__ == "__main__":
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
-    args.learning_rate = 9.9e-4
+    args.learning_rate = 0.002
     args.num_dense_layers = 1
-    args.num_dense_nodes = 178
-    args.epochs = 171
-    args.dropout = 1.0
+    args.num_dense_nodes = 20
+    args.epochs = 332
+    args.dropout = 0.9
 
     # Create logdir name
     args.logdir = "logs/{}-{}-{}".format(

@@ -173,6 +173,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
+    parser.add_argument("--iter", default=100, type=int, help="Number of iterations.")
     parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     parser.add_argument("--episodes", default=100, type=int, help="Number of episodes.")
@@ -183,7 +184,7 @@ if __name__ == "__main__":
     dim_num_dense_layers = Integer(low=1, high=3, name='num_dense_layers')
     dim_num_dense_nodes = Integer(low=5, high=512, name='num_dense_nodes')
     dim_num_epochs = Integer(low=20, high=500, name='num_epochs')
-    dim_dropout = Real(low=0.5, high=1.0, name='dropout')
+    dim_dropout = Real(low=0.9, high=1.0, name='dropout')
     dimensions = [dim_learning_rate,
                   dim_num_dense_layers,
                   dim_num_epochs,
@@ -197,7 +198,7 @@ if __name__ == "__main__":
     res_gp = gp_minimize(func=fitness,
                             dimensions=dimensions,
                             acq_func='EI', # Expected Improvement.
-                            n_calls=100)
+                            n_calls=args.iter)
     
     print("Best score=%.4f" % res_gp.fun)
     print("""Best parameters:

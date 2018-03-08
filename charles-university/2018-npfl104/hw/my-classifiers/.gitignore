@@ -1,0 +1,7 @@
+data/*.csv
+data/*.tgz
+data/*.data
+data/*.test
+
+*.pkl
+__pycache__/

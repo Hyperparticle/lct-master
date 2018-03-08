@@ -1,4 +1,4 @@
-all: download perc knn nb dt
+all: download perc nb knn dt
 
 download:
 	cd data; wget http://ufal.mff.cuni.cz/~zabokrtsky/courses/npfl104/html/classification_data/artificial_objects.tgz

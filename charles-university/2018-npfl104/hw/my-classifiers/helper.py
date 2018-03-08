@@ -18,20 +18,26 @@ def train_test_split():
     data_train, data_test = {}, {}
 
     train = pd.read_csv('data/artificial_separable_train.csv', names=['size', 'color', 'shape', 'class'])
-    train = train.apply(to_int)
     test = pd.read_csv('data/artificial_separable_test.csv', names=['size', 'color', 'shape', 'class'])
-    test = test.apply(to_int)
-    data_train['artificial'] = flatten(train)
-    data_test['artificial'] = flatten(test)
+    
+    traintest = pd.concat([train, test]).apply(to_int)
+    
+    data_train['artificial'] = flatten(traintest.iloc[:len(train)])
+    data_test['artificial'] = flatten(traintest.iloc[len(train):])
 
-    train = pd.read_csv('data/adult.data', names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'class'])
-    train[['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'class']] = train[['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'class']].apply(to_int)
-    train[['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']] = train[['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']].apply(lambda col: [[c] for c in col])
-    test = pd.read_csv('data/adult.test', header=0, names=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'class'])
-    test[['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']] = test[['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']].apply(lambda col: [[c] for c in col])
-    test[['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'class']] = test[['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'class']].apply(to_int)
-    data_train['income'] = flatten(train)
-    data_test['income'] = flatten(test)
+    columns = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'class']
+    categorical = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'class']
+    real = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']
+    
+    train = pd.read_csv('data/adult.data', names=columns)
+    test = pd.read_csv('data/adult.test', header=0, names=columns)
+
+    traintest = pd.concat([train, test])
+    traintest['class'] = [c.rstrip('.') for c in traintest['class']]
+    traintest[categorical] = traintest[categorical].apply(to_int)
+    traintest[real] = traintest[real].apply(lambda col: [[c] for c in col])
+    
+    data_train['income'] = flatten(traintest.iloc[:len(train)])
+    data_test['income'] = flatten(traintest.iloc[len(train):])
 
     return data_train, data_test
-

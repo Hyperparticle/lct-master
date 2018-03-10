@@ -11,6 +11,8 @@ from skopt.plots import plot_convergence
 from skopt.plots import plot_objective, plot_evaluations
 from skopt.utils import use_named_args
 
+# Hyperparameter optimization
+# https://github.com/Hvass-Labs/TensorFlow-Tutorials/blob/master/19_Hyper-Parameters.ipynb
 class Network:
     OBSERVATIONS = 4
     ACTIONS = 2

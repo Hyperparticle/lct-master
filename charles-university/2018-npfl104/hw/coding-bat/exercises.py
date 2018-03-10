@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# coding=utf-8
 
 # 10 tasks from Torbjörn Lager's 46 simple Python Exercices 
 # https://github.com/PabloVallejo/python-exercises/blob/master/exercises-list.md

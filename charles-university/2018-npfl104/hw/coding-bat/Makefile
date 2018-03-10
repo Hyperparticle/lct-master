@@ -1,2 +1,2 @@
 all:
-	python ./exercises.py
+	python3 ./exercises.py

@@ -8,13 +8,13 @@ download:
 	cd data; tar -xzf artificial_objects.tgz
 
 perc:
-	python ./perceptron.py
+	python3 ./perceptron.py
 
 knn:
-	python ./k-nearest-neighbors.py
+	python3 ./k-nearest-neighbors.py
 
 nb:
-	python ./naive-bayes.py
+	python3 ./naive-bayes.py
 
 dt:
-	python ./decision-trees.py
+	python3 ./decision-trees.py

@@ -19,7 +19,7 @@ class Network:
             # Inputs
             self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
             self.labels = tf.placeholder(tf.int64, [None], name="labels")
-            self.is_training = tf.placeholder_with_default(False, [], name="is_training")
+            self.is_training = tf.placeholder(tf.bool, name="is_training") 
 
             # Computation
             flattened_images = tf.layers.flatten(self.images, name="flatten")
@@ -40,16 +40,17 @@ class Network:
             self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
 
             # Summaries
-            self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
+            accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
+            self.accuracy = accuracy
             summary_writer = tf.contrib.summary.create_file_writer(args.logdir, flush_millis=10 * 1000)
             self.summaries = {}
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(100):
                 self.summaries["train"] = [tf.contrib.summary.scalar("train/loss", loss),
-                                           tf.contrib.summary.scalar("train/accuracy", self.accuracy)]
+                                           tf.contrib.summary.scalar("train/accuracy", accuracy)]
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
                 for dataset in ["dev", "test"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", loss),
-                                               tf.contrib.summary.scalar(dataset + "/accuracy", self.accuracy)]
+                                               tf.contrib.summary.scalar(dataset + "/accuracy", accuracy)]
 
             # Initialize variables
             self.session.run(tf.global_variables_initializer())
@@ -60,7 +61,7 @@ class Network:
         self.session.run([self.training, self.summaries["train"]], {self.images: images, self.labels: labels, self.is_training: True})
 
     def evaluate(self, dataset, images, labels):
-        acc, summ = self.session.run([self.accuracy, self.summaries[dataset]], {self.images: images, self.labels: labels})
+        acc, _ = self.session.run([self.accuracy, self.summaries[dataset]], {self.images: images, self.labels: labels, self.is_training: False})
         return acc
 
 

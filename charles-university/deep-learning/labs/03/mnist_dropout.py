@@ -19,7 +19,6 @@ class Network:
             # Inputs
             self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
             self.labels = tf.placeholder(tf.int64, [None], name="labels")
-            self.dropout = tf.placeholder_with_default(0.0, [], name="dropout")
             self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
             # Computation
@@ -30,7 +29,7 @@ class Network:
             # with using dropout date of args.dropout. The dropout must be active only
             # during training, see `training` argument (you will need an additional
             # placeholder to control that). Store the result to `hidden_layer_dropout`.
-            hidden_layer_dropout = tf.layers.dropout(hidden_layer, self.dropout, training=self.is_training)
+            hidden_layer_dropout = tf.layers.dropout(hidden_layer, args.dropout, training=self.is_training)
 
             output_layer = tf.layers.dense(hidden_layer_dropout, self.LABELS, activation=None, name="output_layer")
             self.predictions = tf.argmax(output_layer, axis=1)
@@ -57,11 +56,12 @@ class Network:
             with summary_writer.as_default():
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
-    def train(self, images, labels, dropout=0.0):
-        self.session.run([self.training, self.summaries["train"]], {self.images: images, self.labels: labels, self.dropout: dropout, self.is_training: True})
+    def train(self, images, labels):
+        self.session.run([self.training, self.summaries["train"]], {self.images: images, self.labels: labels, self.is_training: True})
 
     def evaluate(self, dataset, images, labels):
-        self.session.run(self.summaries[dataset], {self.images: images, self.labels: labels})
+        acc, summ = self.session.run([self.accuracy, self.summaries[dataset]], {self.images: images, self.labels: labels})
+        return acc
 
 
 if __name__ == "__main__":
@@ -110,12 +110,11 @@ if __name__ == "__main__":
     for i in range(args.epochs):
         for b in range(batches_per_epoch):
             images, labels = mnist.train.next_batch(args.batch_size)
-            network.train(images, labels, args.dropout)
+            network.train(images, labels)
 
         network.evaluate("dev", mnist.validation.images, mnist.validation.labels)
-    network.evaluate("test", mnist.test.images, mnist.test.labels)
+    accuracy = network.evaluate("test", mnist.test.images, mnist.test.labels)
 
     # Compute accuracy on the test set and print it as percentage rounded
     # to two decimal places.
-    accuracy = network.session.run(network.accuracy, {network.images: mnist.test.images, network.labels: mnist.test.labels})
     print("{:.2f}".format(100 * accuracy))

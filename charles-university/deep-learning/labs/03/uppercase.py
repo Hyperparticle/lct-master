@@ -83,7 +83,6 @@ class Dataset:
             return True
         return False
 
-
 class Network:
     def __init__(self, threads, seed=42):
         # Create an empty graph and a session

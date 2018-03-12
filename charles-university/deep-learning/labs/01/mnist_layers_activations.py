@@ -70,6 +70,8 @@ class Network:
 
     def evaluate(self, dataset, images, labels):
         self.session.run(self.summaries[dataset], {self.images: images, self.labels: labels})
+        # acc, summ = self.session.run([self.accuracy, self.summaries[dataset]], {self.images: images, self.labels: labels})
+        # return acc
 
 
 if __name__ == "__main__":
@@ -120,6 +122,7 @@ if __name__ == "__main__":
 
         network.evaluate("dev", mnist.validation.images, mnist.validation.labels)
     network.evaluate("test", mnist.test.images, mnist.test.labels)
+    # acc = network.evaluate("test", mnist.test.images, mnist.test.labels)
 
     # Compute and print accuracy on the test set. Print accuracy as
     # percentage rounded on two decimal places, e.g., 91.23

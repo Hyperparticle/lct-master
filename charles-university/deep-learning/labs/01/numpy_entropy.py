@@ -8,8 +8,6 @@ if __name__ == "__main__":
         data_count = Counter(line.rstrip('\n') for line in data.readlines())
 
     # Create a NumPy array containing the data distribution
-    # chars = sorted(data_count.keys())
-    # data_probs = np.array([data_count[k] / sum(data_count.values()) for k in chars])
     data_probs = defaultdict(int)
     data_probs.update({k:(data_count[k] / sum(data_count.values())) for k in data_count.keys()})
 
@@ -38,3 +36,17 @@ if __name__ == "__main__":
 
     kl_divergence = cross_entropy - entropy
     print("{:.2f}".format(kl_divergence))
+
+
+
+    # Map strings to ids
+    # d = np.array(data_count.values)
+    # d /= np.sum(d)
+
+    # entropy = - np.sum(d * np.log(d))
+
+    # m = np.zeros(len(data_count))
+    # crossentropy = np.sum(-d * np.log(m))
+
+
+

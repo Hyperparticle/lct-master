@@ -98,9 +98,20 @@ class Network:
             self.windows = tf.placeholder(tf.int32, [None, 2 * args.window + 1], name="windows")
             self.labels = tf.placeholder(tf.bool, [None], name="labels") # Or you can use tf.int32
 
-            # TODO: Define a suitable network with appropriate loss function
+            # Define a suitable network with appropriate loss function
+            hidden_layer = tf.one_hot(self.windows, args.alphabet_size)
+            for _ in range(args.num_dense_layers):
+                hidden_layer = tf.layers.dense(hidden_layer, args.num_dense_nodes, activation=tf.nn.relu)
+                # hidden_layer = tf.layers.dropout(hidden_layer, args.dropout, training=False)
 
-            # TODO: Define training
+            output_layer = tf.layers.dense(hidden_layer, 2, activation=None, name="output_layer")
+
+            self.predictions = tf.argmax(output_layer, axis=1)
+
+            # Define training
+            loss = tf.losses.sparse_softmax_cross_entropy(self.labels, output_layer, scope="loss")
+            global_step = tf.train.create_global_step()
+            self.training = tf.train.AdamOptimizer(learning_rate=args.learning_rate).minimize(loss, global_step=global_step, name="training")
 
             # Summaries
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
@@ -137,12 +148,19 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--alphabet_size", default=None, type=int, help="Alphabet size.")
-    parser.add_argument("--batch_size", default=None, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=None, type=int, help="Number of epochs.")
+    parser.add_argument("--alphabet_size", default=1000, type=int, help="Alphabet size.")
+    parser.add_argument("--batch_size", default=128, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--window", default=None, type=int, help="Size of the window to use.")
+    parser.add_argument("--window", default=50, type=int, help="Size of the window to use.")
+
+    parser.add_argument("--dropout", default=0.0, type=float)
+
     args = parser.parse_args()
+
+    args.learning_rate = 0.002
+    args.num_dense_layers = 1
+    args.num_dense_nodes = 150
 
     # Create logdir name
     args.logdir = "logs/{}-{}-{}".format(
@@ -169,5 +187,7 @@ if __name__ == "__main__":
 
         dev_windows, dev_labels = dev.all_data()
         network.evaluate("dev", dev_windows, dev_labels)
+    
 
-    # TODO: Generate the uppercased test set
+    # Generate the uppercased test set
+

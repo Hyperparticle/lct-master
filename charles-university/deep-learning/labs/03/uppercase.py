@@ -96,13 +96,15 @@ class Network:
         with self.session.graph.as_default():
             # Inputs
             self.windows = tf.placeholder(tf.int32, [None, 2 * args.window + 1], name="windows")
-            self.labels = tf.placeholder(tf.bool, [None], name="labels") # Or you can use tf.int32
+            self.labels = tf.placeholder(tf.int64, [None], name="labels") # Or you can use tf.int32
+            self.dropout = tf.placeholder_with_default(0.0, [], name="dropout")
+            self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
             # Define a suitable network with appropriate loss function
-            hidden_layer = tf.one_hot(self.windows, args.alphabet_size)
+            hidden_layer = tf.layers.flatten(tf.one_hot(self.windows, args.alphabet_size))
             for _ in range(args.num_dense_layers):
                 hidden_layer = tf.layers.dense(hidden_layer, args.num_dense_nodes, activation=tf.nn.relu)
-                # hidden_layer = tf.layers.dropout(hidden_layer, args.dropout, training=False)
+                hidden_layer = tf.layers.dropout(hidden_layer, args.dropout, training=self.is_training)
 
             output_layer = tf.layers.dense(hidden_layer, 2, activation=None, name="output_layer")
 
@@ -131,11 +133,13 @@ class Network:
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def train(self, windows, labels):
-        self.session.run([self.training, self.summaries["train"]], {self.windows: windows, self.labels: labels})
+        self.session.run([self.training, self.summaries["train"]], {self.windows: windows, self.labels: labels, self.dropout: args.dropout, self.is_training: True})
 
     def evaluate(self, dataset, windows, labels):
         return self.session.run(self.summaries[dataset], {self.windows: windows, self.labels: labels})
 
+    def predict(self, windows):
+        return self.session.run(self.predictions, {self.windows: windows, self.labels: []})
 
 if __name__ == "__main__":
     import argparse
@@ -148,19 +152,18 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--alphabet_size", default=1000, type=int, help="Alphabet size.")
-    parser.add_argument("--batch_size", default=128, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
+    parser.add_argument("--alphabet_size", default=200, type=int, help="Alphabet size.")
+    parser.add_argument("--batch_size", default=512, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=5, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--window", default=50, type=int, help="Size of the window to use.")
+    parser.add_argument("--window", default=10, type=int, help="Size of the window to use.")
 
-    parser.add_argument("--dropout", default=0.0, type=float)
+    parser.add_argument("--dropout", default=0.1, type=float)
+    parser.add_argument("--learning_rate", default=0.001, type=float)
+    parser.add_argument("--num_dense_layers", default=2, type=int)
+    parser.add_argument("--num_dense_nodes", default=300, type=int)
 
     args = parser.parse_args()
-
-    args.learning_rate = 0.002
-    args.num_dense_layers = 1
-    args.num_dense_nodes = 150
 
     # Create logdir name
     args.logdir = "logs/{}-{}-{}".format(
@@ -182,12 +185,16 @@ if __name__ == "__main__":
     # Train
     for i in range(args.epochs):
         while not train.epoch_finished():
+            print('Epoch:', i, 'Remaining:', len(train._permutation))
             windows, labels = train.next_batch(args.batch_size)
             network.train(windows, labels)
 
         dev_windows, dev_labels = dev.all_data()
         network.evaluate("dev", dev_windows, dev_labels)
     
-
     # Generate the uppercased test set
+    test_windows, _ = test.all_data()
+    predictions = network.predict(test_windows)
+    text = ''.join(c.upper() if p == 1 else c for c,p in zip(test.text, predictions))
 
+    print(text)

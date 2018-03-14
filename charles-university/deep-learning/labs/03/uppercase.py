@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm
+import skopt
 
 # Loads an uppercase dataset.
 # - The dataset either uses a specified alphabet, or constructs an alphabet of
@@ -15,7 +17,7 @@ class Dataset:
         self._window = window
 
         # Load the data
-        with open(filename, "r") as file:
+        with open(filename, "r", encoding='utf-8') as file:
             self._text = file.read()
 
         # Create alphabet_map
@@ -91,7 +93,7 @@ class Network:
         self.session = tf.Session(graph = graph, config=tf.ConfigProto(inter_op_parallelism_threads=threads,
                                                                        intra_op_parallelism_threads=threads))
 
-    def construct(self, args):
+    def construct(self, args, logdir):
         with self.session.graph.as_default():
             # Inputs
             self.windows = tf.placeholder(tf.int32, [None, 2 * args.window + 1], name="windows")
@@ -116,7 +118,7 @@ class Network:
 
             # Summaries
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
-            summary_writer = tf.contrib.summary.create_file_writer(args.logdir, flush_millis=10 * 1000)
+            summary_writer = tf.contrib.summary.create_file_writer(logdir, flush_millis=10 * 1000)
             self.summaries = {}
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(100):
                 self.summaries["train"] = [tf.contrib.summary.scalar("train/loss", loss),
@@ -126,6 +128,11 @@ class Network:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", loss),
                                                tf.contrib.summary.scalar(dataset + "/accuracy", self.accuracy)]
 
+            # Construct the saver
+            tf.add_to_collection("end_points/windows", self.windows)
+            tf.add_to_collection("end_points/labels", self.labels)
+            self.saver = tf.train.Saver()
+
             # Initialize variables
             self.session.run(tf.global_variables_initializer())
             with summary_writer.as_default():
@@ -134,11 +141,81 @@ class Network:
     def train(self, windows, labels):
         self.session.run([self.training, self.summaries["train"]], {self.windows: windows, self.labels: labels, self.dropout: args.dropout, self.is_training: True})
 
+    def save(self, path):
+        self.saver.save(self.session, path)
+
+    def load(self, path):
+        # Load the metagraph
+        with self.session.graph.as_default():
+            self.saver = tf.train.import_meta_graph(path + ".meta")
+
+            # Attach the end points
+            self.observations = tf.get_collection("end_points/windows")[0]
+            self.actions = tf.get_collection("end_points/labels")[0]
+
     def evaluate(self, dataset, windows, labels):
-        return self.session.run(self.summaries[dataset], {self.windows: windows, self.labels: labels})
+        acc, _ = self.session.run([self.accuracy, self.summaries[dataset]], {self.windows: windows, self.labels: labels})
+        return acc
 
     def predict(self, windows):
         return self.session.run(self.predictions, {self.windows: windows, self.labels: []})
+
+def test_network(train, dev, args, logdir):
+    # Construct the network
+    network = Network(threads=args.threads)
+    network.construct(args, logdir)
+
+    # Train
+    for i in range(args.epochs):
+        print('Epoch:', i+1, 'of', args.epochs)
+        with tqdm(total=len(train._permutation)) as pbar:
+            while not train.epoch_finished():
+                windows, labels = train.next_batch(args.batch_size)
+                network.train(windows, labels)
+                pbar.update(len(windows))
+
+        dev_windows, dev_labels = dev.all_data()
+        network.evaluate("dev", dev_windows, dev_labels)
+    accuracy = network.evaluate("dev", dev_windows, dev_labels)
+    return network, accuracy
+
+def fitness(x):
+    global train, dev, call_num, best_accuracy
+
+    args.learning_rate, args.num_dense_layers, args.num_dense_nodes, args.epochs, args.dropout = x
+
+    call_num += 1
+
+    print('Iteration', call_num)
+
+    # Create logdir name
+    logdir = "logs/{}-{}-{}".format(
+        os.path.basename(__file__),
+        datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value) for key, value in sorted(vars(args).items())))
+    )
+    if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
+
+    network, accuracy = test_network(train, dev, args, logdir)
+
+    if accuracy > best_accuracy:
+        print()
+        print('New best')
+        print('Reward: {:.2f}'.format(accuracy))
+        print('learning rate: {0:.1e}'.format(args.learning_rate))
+        print('num_dense_layers:', args.num_dense_layers)
+        print('num_dense_nodes:', args.num_dense_nodes)
+        print('num_epochs:', args.epochs)
+        print('dropout: {0:.1e}'.format(args.dropout))
+        print()
+
+        network.save('upperacase/model')
+        best_accuracy = accuracy
+
+    network.session.close()
+    del network
+
+    return -accuracy
 
 if __name__ == "__main__":
     import argparse
@@ -153,6 +230,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--alphabet_size", default=200, type=int, help="Alphabet size.")
     parser.add_argument("--batch_size", default=512, type=int, help="Batch size.")
+    parser.add_argument("--iter", default=100, type=int, help="Number of iterations.")
     parser.add_argument("--epochs", default=5, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     parser.add_argument("--window", default=10, type=int, help="Size of the window to use.")
@@ -164,36 +242,44 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Create logdir name
-    args.logdir = "logs/{}-{}-{}".format(
-        os.path.basename(__file__),
-        datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
-        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value) for key, value in sorted(vars(args).items())))
-    )
-    if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
-
     # Load the data
     train = Dataset("uppercase_data_train.txt", args.window, alphabet=args.alphabet_size)
     dev = Dataset("uppercase_data_dev.txt", args.window, alphabet=train.alphabet)
     test = Dataset("uppercase_data_test.txt", args.window, alphabet=train.alphabet)
 
-    # Construct the network
-    network = Network(threads=args.threads)
-    network.construct(args)
+    dim_learning_rate = skopt.space.Real(low=1e-6, high=1e-2, prior='log-uniform', name='learning_rate')
+    dim_num_dense_layers = skopt.space.Integer(low=1, high=3, name='num_dense_layers')
+    dim_num_dense_nodes = skopt.space.Integer(low=5, high=512, name='num_dense_nodes')
+    dim_num_epochs = skopt.space.Integer(low=1, high=5, name='num_epochs')
+    dim_dropout = skopt.space.Real(low=0.9, high=1.0, name='dropout')
+    dimensions = [dim_learning_rate,
+                  dim_num_dense_layers,
+                  dim_num_epochs,
+                  dim_num_epochs,
+                  dim_dropout]
+    default_parameters = [1e-5, 1, 16, 50, 1.0]
 
-    # Train
-    for i in range(args.epochs):
-        while not train.epoch_finished():
-            print('Epoch:', i, 'Remaining:', len(train._permutation))
-            windows, labels = train.next_batch(args.batch_size)
-            network.train(windows, labels)
+    best_accuracy = 0.0
+    call_num = 0
 
-        dev_windows, dev_labels = dev.all_data()
-        network.evaluate("dev", dev_windows, dev_labels)
+    res_gp = skopt.gp_minimize(func=fitness,
+                            dimensions=dimensions,
+                            acq_func='EI', # Expected Improvement.
+                            n_calls=args.iter)
     
-    # Generate the uppercased test set
-    test_windows, _ = test.all_data()
-    predictions = network.predict(test_windows)
-    text = ''.join(c.upper() if p == 1 else c for c,p in zip(test.text, predictions))
+    print("Best score=%.4f" % res_gp.fun)
+    print("""Best parameters:
+            - learning_rate=%d
+            - num_dense_layers=%.6f
+            - num_dense_nodes=%d
+            - num_epochs=%d
+            - dropout=%d""" % (res_gp.x[0], res_gp.x[1], 
+                                        res_gp.x[2], res_gp.x[3], 
+                                        res_gp.x[4]))
+    
+    # # Generate the uppercased test set
+    # test_windows, _ = test.all_data()
+    # predictions = network.predict(test_windows)
+    # text = ''.join(c.upper() if p == 1 else c for c,p in zip(test.text, predictions))
 
-    print(text)
+    # print(text)

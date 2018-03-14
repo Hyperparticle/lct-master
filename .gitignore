@@ -1,0 +1,5 @@
+**/hw03/*.csv
+**/hw03/*.txt
+**/hw04/data/*
+
+__pycache__/

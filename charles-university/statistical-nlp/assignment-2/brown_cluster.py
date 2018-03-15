@@ -3,15 +3,12 @@
 
 import random
 import itertools
-import logging
-from collections import defaultdict, Counter
-from math import log, isnan, isinf
+from collections import defaultdict, Counter, Iterable
+from math import isnan, isinf
 from tqdm import tqdm
 from scipy.special import comb
-
-random.seed(100)
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s\t%(message)s')
+import pandas as pd
+import numpy as np
 
 
 class LmCluster(object):
@@ -20,101 +17,104 @@ class LmCluster(object):
         self.word_cutoff = word_cutoff
         self.cluster_cutoff = cluster_cutoff
 
-        # mapping from cluster IDs to cluster IDs,
-        # to keep track of the hierarchy
-        self.cluster_parents = {}
-        self.cluster_counter = 0
-        self.cluster_history = []
-
-        # the 0/1 bit to add when walking up the hierarchy
-        # from a word to the top-level cluster
-        self.cluster_bits = {}
-
-        # the list of words in the vocabulary and their counts
-        self.counts = defaultdict(int)
-        self.trans = defaultdict(lambda: defaultdict(int))
         self.num_tokens = len(self.tokens)
+        self.word_counts, self.bigram_counts, self.word2int, self.int2word = self.freq_dist(self.tokens)
 
-        # the graph weights (w) and the effects of merging nodes (L) (see Liang's thesis)
-        self.w = defaultdict(lambda: defaultdict(float))
-        self.L = defaultdict(lambda: defaultdict(float))
+        # Hierarchical mapping of cluster IDs
+        self.cluster_parents = {}
+        self.cluster_history = []
+        # self.cluster_bits = {}  # the bit to add when walking up the hierarchy from a word to the top-level cluster
+        self.cluster_counter = len(self.word2int)
 
-        # find the most frequent words
-        self.vocab = {}
-        self.reverse_vocab = []
-
-        # create sets of documents that each word appears in
-        self.create_vocab()
-        self.create_index()
-
-        # make a copy of the list of words, as a queue for making new clusters
-        self.classes = [word for word in list(range(len(self.vocab))) if self.counts[word] >= self.word_cutoff]
-        # self.classes = list(range(len(self.vocab)))
-        logging.info('Starting classes: ' + str(len(self.classes)))
-
-        self.initialize_tables()
-
-        with tqdm(total=len(self.classes) - self.cluster_cutoff, unit='class') as t:
-            while len(self.classes) > self.cluster_cutoff:
-                c1, c2 = self.find_best()  # find the best pair of words/clusters to merge
-                c_new = self.merge(c1, c2)  # merge the clusters in the index
-
-                self.cluster_counter += 1
-                t.update(1)
-
-                c1 = self.reverse_vocab[c1] if c1 < len(self.reverse_vocab) else c1
-                c2 = self.reverse_vocab[c2] if c2 < len(self.reverse_vocab) else c2
-                self.cluster_history.append((c1, c2, c_new))
-
-                # logging.info('{0: <10} + {1: <10} -> {2: <10}'.format(c1, c2, self.cluster_counter))
-
-    def create_vocab(self):
-        tmp_counts = Counter(self.tokens)
-        words = sorted(tmp_counts.keys(), key=lambda w: tmp_counts[w], reverse=True)
-
-        for i, w in enumerate(words):
-            self.vocab[w] = i
-            self.counts[self.vocab[w]] = tmp_counts[w]
-
-        self.reverse_vocab = sorted(self.vocab.keys(), key=lambda w: self.vocab[w])
-        self.cluster_counter = len(self.vocab)
-
-    def create_index(self):
-        for w1, w2 in zip(self.tokens, self.tokens[1:]):
-            if w1 in self.vocab and w2 in self.vocab:
-                self.trans[self.vocab[w1]][self.vocab[w2]] += 1
-
-        logging.info('{} word tokens were processed.'.format(self.num_tokens))
-
-    def initialize_tables(self):
-        logging.info("initializing tables")
-
-        # edges between nodes
-        for c1, c2 in itertools.combinations(self.classes, 2):
-            self.w[c1][c2] = self.compute_weight([c1], [c2]) + self.compute_weight([c2], [c1])
-
-        # edges to and from a single node
-        for c in self.classes:
-            self.w[c][c] = self.compute_weight([c], [c])
-
-        # print(sum(self.w[c1][c2] for c1 in self.w for c2 in self.w[c1]))
+        self.classes = [word for word in range(len(self.word2int)) if self.word_counts[word] >= self.word_cutoff]
 
         # classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
-        classes = self.classes
+        # classes = self.classes
+
+        # The graph weights W and the results of merging nodes L (Liang's thesis)
+        self.W = self.build_w(self.classes)
+        self.L = self.build_l(self.classes)
+
+        print('Word tokens: {}'.format(self.num_tokens))
+        print('Starting classes: {}'.format(len(self.classes)))
+        print('Starting MI:', sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1]))
+
+        scores = sorted([(*self.class_name([c1, c2]), score) for c1 in self.L for c2, score in self.L[c1].items()],
+                        key=lambda s: s[2], reverse=True)[:20]
+
+        print('\n'.join([str(s) for s in scores]))
+
+        merges = len(self.classes) - self.cluster_cutoff
+        for _ in tqdm(range(merges), unit='class'):
+            # Merge the classes that reduce the mutual information the least
+            c1, c2 = self.find_best_merge()
+            c_new = self.merge_classes(c1, c2)
+
+            # Add classes to the history of merges
+            self.cluster_history.append((*self.class_name([c1, c2]), c_new))
+
+            self.cluster_counter += 1
+
+    def class_name(self, classes):
+        if not isinstance(classes, Iterable):
+            classes = [classes]
+
+        classes = [self.int2word[c] if c < len(self.int2word) else str(c) for c in classes]
+        return classes if len(classes) > 1 else classes[0]
+
+    @staticmethod
+    def freq_dist(tokens):
+        counts = Counter(tokens)
+        # word_set = sorted(counts.keys(), key=lambda word: counts[word], reverse=True)
+        word_set = counts.keys()
+
+        word2int = {}
+        word_counts = defaultdict(int)
+
+        for i, w in enumerate(word_set):
+            word2int[w] = i
+            word_counts[word2int[w]] = counts[w]
+
+        int2word = sorted(word2int.keys(), key=lambda word: word2int[word])
+
+        bigram_counts = defaultdict(lambda: defaultdict(int))
+        for w1, w2 in zip(tokens, tokens[1:]):
+            bigram_counts[word2int[w1]][word2int[w2]] += 1
+
+        return word_counts, bigram_counts, word2int, int2word
+
+    def build_w(self, classes):
+        W = defaultdict(lambda: defaultdict(float))
+
+        # edges between nodes
+        for c1, c2 in itertools.combinations(classes, 2):
+            W[c1][c2] = self.compute_weight([c1], [c2]) + self.compute_weight([c2], [c1])
+
+        # edges to and from a single node
+        for c in classes:
+            W[c][c] = self.compute_weight([c], [c])
+
+        return W
+
+    def build_l(self, classes):
+        L = defaultdict(lambda: defaultdict(float))
+
         total = comb(len(classes), 2, exact=True)
         for c1, c2 in tqdm(itertools.combinations(classes, 2), total=total, unit='pairs'):
-            self.compute_l(c1, c2)
+            L[c1][c2] = self.compute_l(c1, c2)
+
+        return L
 
     def compute_weight(self, nodes1, nodes2):
-        paircount = sum(self.trans[n1][n2] for n1 in nodes1 for n2 in nodes2)
+        paircount = sum(self.bigram_counts[n1][n2] for n1 in nodes1 for n2 in nodes2)
 
         if not paircount:
             return 0.0
 
-        count_1 = sum(self.counts[n] for n in nodes1)
-        count_2 = sum(self.counts[n] for n in nodes2)
+        count_1 = sum(self.word_counts[n] for n in nodes1)
+        count_2 = sum(self.word_counts[n] for n in nodes2)
 
-        return (paircount / self.num_tokens) * log(paircount * self.num_tokens / count_1 / count_2, 2)
+        return (paircount / self.num_tokens) * np.log2(paircount * self.num_tokens / count_1 / count_2)
 
     def compute_l(self, c1, c2):
         val = 0.0
@@ -142,14 +142,14 @@ class LmCluster(object):
         # (which would be removed)
         for d in classes:
             for c in [c1, c2]:
-                if d in self.w[c]:
-                    val -= self.w[c][d]
-                elif c in self.w[d]:
-                    val -= self.w[d][c]
+                if d in self.W[c]:
+                    val -= self.W[c][d]
+                elif c in self.W[d]:
+                    val -= self.W[d][c]
 
-        self.L[c1][c2] = val
+        return val
 
-    def find_best(self):
+    def find_best_merge(self):
         best_score = float('-inf')
         argmax = None
 
@@ -168,25 +168,27 @@ class LmCluster(object):
         #         c1, c2 = argmax[random.randint(0, len(argmax) - 1)]
         c1, c2 = argmax[0]
 
+        # print('{0: <10} + {1: <10} -> {2: <10}'.format(*self.class_name([c1, c2]), self.cluster_counter))
+
         return c1, c2
 
-    def merge(self, c1, c2):
+    def merge_classes(self, c1, c2):
         c_new = self.cluster_counter
 
         # record parents
         self.cluster_parents[c1] = c_new
         self.cluster_parents[c2] = c_new
-        r = random.randint(0, 1)
-        self.cluster_bits[c1] = str(r)  # assign bits randomly
-        self.cluster_bits[c2] = str(1 - r)
+        # r = random.randint(0, 1)
+        # self.cluster_bits[c1] = str(r)  # assign bits randomly
+        # self.cluster_bits[c2] = str(1 - r)
 
         # add the new cluster to the counts and transitions dictionaries
-        self.counts[c_new] = self.counts[c1] + self.counts[c2]
+        self.word_counts[c_new] = self.word_counts[c1] + self.word_counts[c2]
         for c in [c1, c2]:
-            for d, val in self.trans[c].items():
+            for d, val in self.bigram_counts[c].items():
                 if d == c1 or d == c2:
                     d = c_new
-                self.trans[c_new][d] += val
+                self.bigram_counts[c_new][d] += val
 
         # subtract the weights for the merged nodes from the score table
         # TODO this is slow
@@ -198,20 +200,20 @@ class LmCluster(object):
 
         # remove merged clusters from the counts and transitions dictionaries
         # to save memory (but keep frequencies for words for the final output)
-        if c1 >= len(self.vocab):
-            del self.counts[c1]
-        if c2 >= len(self.vocab) and c2 in self.counts:
-            del self.counts[c2]
+        if c1 >= len(self.word2int):
+            del self.word_counts[c1]
+        if c2 >= len(self.word2int) and c2 in self.word_counts:
+            del self.word_counts[c2]
 
-        del self.trans[c1]
-        del self.trans[c2]
-        for d in self.trans:
+        del self.bigram_counts[c1]
+        del self.bigram_counts[c2]
+        for d in self.bigram_counts:
             for c in [c1, c2]:
-                if c in self.trans[d]:
-                    del self.trans[d][c]
+                if c in self.bigram_counts[d]:
+                    del self.bigram_counts[d][c]
 
         # remove the old clusters from the w and L tables
-        for table in [self.w, self.L]:
+        for table in [self.W, self.L]:
             for d in table:
                 if c1 in table[d]:
                     del table[d][c1]
@@ -234,9 +236,9 @@ class LmCluster(object):
     def add_to_batch(self, c_new):
         # compute weights for edges connected to the new node
         for d in self.classes:
-            self.w[d][c_new] = self.compute_weight([d], [c_new])
-            self.w[d][c_new] = self.compute_weight([c_new], [d])
-        self.w[c_new][c_new] = self.compute_weight([c_new], [c_new])
+            self.W[d][c_new] = self.compute_weight([d], [c_new])
+            self.W[d][c_new] = self.compute_weight([c_new], [d])
+        self.W[c_new][c_new] = self.compute_weight([c_new], [c_new])
 
         # add the weights from this new node to the merge score table
         # TODO this is slow
@@ -252,24 +254,24 @@ class LmCluster(object):
         # now add it to the batch
         self.classes.append(c_new)
 
-    def get_bitstring(self, w):
-        # walk up the cluster hierarchy until there is no parent cluster
-        cur_cluster = self.vocab[w]
-        bitstring = ""
-        while cur_cluster in self.cluster_parents:
-            bitstring = self.cluster_bits[cur_cluster] + bitstring
-            cur_cluster = self.cluster_parents[cur_cluster]
-        return bitstring
-
-    def save_clusters(self, output_path):
-        with open(output_path, 'w') as f:
-            for w in self.vocab:
-                # convert the counts back to ints when printing
-                f.write("{}\t{}\t{}\n".format(w, self.get_bitstring(w), self.counts[self.vocab[w]]))
-
-    def print_clusters(self):
-        for w in self.vocab:
-            print("{}\t{}\t{}".format(w, self.get_bitstring(w), self.counts[self.vocab[w]]))
+    # def get_bitstring(self, w):
+    #     # walk up the cluster hierarchy until there is no parent cluster
+    #     cur_cluster = self.word2int[w]
+    #     bitstring = ""
+    #     while cur_cluster in self.cluster_parents:
+    #         bitstring = self.cluster_bits[cur_cluster] + bitstring
+    #         cur_cluster = self.cluster_parents[cur_cluster]
+    #     return bitstring
+    #
+    # def save_clusters(self, output_path):
+    #     with open(output_path, 'w') as f:
+    #         for w in self.word2int:
+    #             # convert the counts back to ints when printing
+    #             f.write("{}\t{}\t{}\n".format(w, self.get_bitstring(w), self.word_counts[self.word2int[w]]))
+    #
+    # def print_clusters(self):
+    #     for w in self.word2int:
+    #         print("{}\t{}\t{}".format(w, self.get_bitstring(w), self.word_counts[self.word2int[w]]))
 
 
 def preprocess(word):
@@ -284,8 +286,16 @@ def open_text(filename):
     return [preprocess(word) for word in content]
 
 
-if __name__ == '__main__':
-    english = './TEXTEN1.txt'
-    words = open_text(english)
+def history(cluster):
+    return pd.DataFrame(cluster.cluster_history, columns=['prev word', 'word', 'cluster id'])
 
-    c = LmCluster(words[:8000])
+
+if __name__ == '__main__':
+    random.seed(100)
+
+    english = './TEXTEN1.txt'
+    words_en = open_text(english)
+
+    lm_cluster = LmCluster(words_en[:8000])
+
+    print(history(lm_cluster)[:5])

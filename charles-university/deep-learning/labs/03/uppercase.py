@@ -161,6 +161,8 @@ class Network:
         return self.session.run(self.predictions, {self.windows: windows, self.labels: []})
 
 def test_network(train, dev, args, logdir, activations):
+    accuracy_threshold = 0.974
+
     # Construct the network
     network = Network(threads=args.threads)
     network.construct(args, logdir, activations)
@@ -175,7 +177,11 @@ def test_network(train, dev, args, logdir, activations):
                 pbar.update(len(windows))
 
         dev_windows, dev_labels = dev.all_data()
-        network.evaluate("dev", dev_windows, dev_labels)
+        acc = network.evaluate("dev", dev_windows, dev_labels)
+
+        if acc < accuracy_threshold and i > 0:
+            return network, acc
+
     accuracy = network.evaluate("dev", dev_windows, dev_labels)
     return network, accuracy
 
@@ -209,12 +215,12 @@ def fitness(x):
     if accuracy > best_accuracy:
         print()
         print('New best')
-        print('Reward: {:.2f}'.format(accuracy))
-        print('learning rate: {0:.1e}'.format(args.learning_rate))
+        print('Accuracy: {:.4f}'.format(accuracy))
+        print('learning rate: {0:.2e}'.format(args.learning_rate))
         print('num_dense_layers:', args.num_dense_layers)
         print('num_dense_nodes:', args.num_dense_nodes)
         print('num_epochs:', args.epochs)
-        print('dropout: {0:.1e}'.format(args.dropout))
+        print('dropout: {0:.2e}'.format(args.dropout))
         print('window:', args.window)
         print('activation:', args.activation)
 
@@ -272,10 +278,12 @@ if __name__ == "__main__":
                   dim_dropout,
                   dim_window,
                   dim_activation]
-    default_parameters = [0.00045, 3, 1024, 0.25, 8, 'elu']
+    default_parameters = [0.00045, 3, 1024, 0.3, 8, 'elu']
 
     best_accuracy = 0.0
     call_num = 0
+
+    skopt.forest_minimize
 
     res_gp = skopt.gp_minimize(func=fitness,
                             dimensions=dimensions,

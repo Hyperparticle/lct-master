@@ -93,18 +93,18 @@ class Network:
         self.session = tf.Session(graph = graph, config=tf.ConfigProto(inter_op_parallelism_threads=threads,
                                                                        intra_op_parallelism_threads=threads))
 
-    def construct(self, args, logdir):
+    def construct(self, args, logdir, activations):
         with self.session.graph.as_default():
             # Inputs
             self.windows = tf.placeholder(tf.int32, [None, 2 * args.window + 1], name="windows")
             self.labels = tf.placeholder(tf.int64, [None], name="labels") # Or you can use tf.int32
-            self.dropout = tf.placeholder_with_default(0.0, [], name="dropout")
             self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
             # Define a suitable network with appropriate loss function
             hidden_layer = tf.layers.flatten(tf.one_hot(self.windows, args.alphabet_size))
             for _ in range(args.num_dense_layers):
-                hidden_layer = tf.layers.dense(hidden_layer, args.num_dense_nodes, activation=tf.nn.relu)
+                hidden_layer = tf.layers.dense(hidden_layer, args.num_dense_nodes, activation=activations[args.activation])
+                hidden_layer = tf.contrib.layers.layer_norm(hidden_layer)
                 hidden_layer = tf.layers.dropout(hidden_layer, args.dropout, training=self.is_training)
 
             output_layer = tf.layers.dense(hidden_layer, 2, activation=None, name="output_layer")
@@ -139,7 +139,7 @@ class Network:
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def train(self, windows, labels):
-        self.session.run([self.training, self.summaries["train"]], {self.windows: windows, self.labels: labels, self.dropout: args.dropout, self.is_training: True})
+        self.session.run([self.training, self.summaries["train"]], {self.windows: windows, self.labels: labels, self.is_training: True})
 
     def save(self, path):
         self.saver.save(self.session, path)
@@ -160,10 +160,10 @@ class Network:
     def predict(self, windows):
         return self.session.run(self.predictions, {self.windows: windows, self.labels: []})
 
-def test_network(train, dev, args, logdir):
+def test_network(train, dev, args, logdir, activations):
     # Construct the network
     network = Network(threads=args.threads)
-    network.construct(args, logdir)
+    network.construct(args, logdir, activations)
 
     # Train
     for i in range(args.epochs):
@@ -180,9 +180,9 @@ def test_network(train, dev, args, logdir):
     return network, accuracy
 
 def fitness(x):
-    global train, dev, call_num, best_accuracy
+    global call_num, best_accuracy, activations
 
-    args.learning_rate, args.num_dense_layers, args.num_dense_nodes, args.epochs, args.dropout = x
+    args.learning_rate, args.num_dense_layers, args.num_dense_nodes, args.dropout, args.window, args.activation = x
 
     call_num += 1
 
@@ -196,7 +196,15 @@ def fitness(x):
     )
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
-    network, accuracy = test_network(train, dev, args, logdir)
+    # Load the data
+    train = Dataset("uppercase_data_train.txt", args.window, alphabet=args.alphabet_size)
+    dev = Dataset("uppercase_data_dev.txt", args.window, alphabet=train.alphabet)
+    test = Dataset("uppercase_data_test.txt", args.window, alphabet=train.alphabet)
+
+    try:
+        network, accuracy = test_network(train, dev, args, logdir, activations)
+    except tf.errors.ResourceExhaustedError:
+        return 1.0
 
     if accuracy > best_accuracy:
         print()
@@ -207,7 +215,8 @@ def fitness(x):
         print('num_dense_nodes:', args.num_dense_nodes)
         print('num_epochs:', args.epochs)
         print('dropout: {0:.1e}'.format(args.dropout))
-        print()
+        print('window:', args.window)
+        print('activation:', args.activation)
 
         network.save('upperacase/model')
         best_accuracy = accuracy
@@ -215,7 +224,7 @@ def fitness(x):
     network.session.close()
     del network
 
-    return -accuracy
+    return 1.0 - accuracy
 
 if __name__ == "__main__":
     import argparse
@@ -230,9 +239,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--alphabet_size", default=200, type=int, help="Alphabet size.")
     parser.add_argument("--batch_size", default=512, type=int, help="Batch size.")
-    parser.add_argument("--iter", default=100, type=int, help="Number of iterations.")
-    parser.add_argument("--epochs", default=5, type=int, help="Number of epochs.")
-    parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+    parser.add_argument("--iter", default=1000, type=int, help="Number of iterations.")
+    parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
+    parser.add_argument("--threads", default=4, type=int, help="Maximum number of threads to use.")
     parser.add_argument("--window", default=10, type=int, help="Size of the window to use.")
 
     parser.add_argument("--dropout", default=0.1, type=float)
@@ -242,22 +251,28 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Load the data
-    train = Dataset("uppercase_data_train.txt", args.window, alphabet=args.alphabet_size)
-    dev = Dataset("uppercase_data_dev.txt", args.window, alphabet=train.alphabet)
-    test = Dataset("uppercase_data_test.txt", args.window, alphabet=train.alphabet)
+    activations = {
+        'tanh': tf.nn.tanh,
+        'relu': tf.nn.relu,
+        'elu': tf.nn.elu,
+        'selu': tf.nn.selu
+    }
 
     dim_learning_rate = skopt.space.Real(low=1e-6, high=1e-2, prior='log-uniform', name='learning_rate')
-    dim_num_dense_layers = skopt.space.Integer(low=1, high=3, name='num_dense_layers')
-    dim_num_dense_nodes = skopt.space.Integer(low=5, high=512, name='num_dense_nodes')
-    dim_num_epochs = skopt.space.Integer(low=1, high=5, name='num_epochs')
-    dim_dropout = skopt.space.Real(low=0.9, high=1.0, name='dropout')
+    dim_num_dense_layers = skopt.space.Integer(low=1, high=6, name='num_dense_layers')
+    dim_num_dense_nodes = skopt.space.Integer(low=200, high=4096, name='num_dense_nodes')
+    # dim_num_epochs = skopt.space.Integer(low=1, high=5, name='num_epochs')
+    dim_dropout = skopt.space.Real(low=0.0, high=0.4, name='dropout')
+    dim_window = skopt.space.Integer(low=5, high=20, name='window')
+    dim_activation = skopt.space.Categorical(activations.keys(), name='activation')
+
     dimensions = [dim_learning_rate,
                   dim_num_dense_layers,
-                  dim_num_epochs,
-                  dim_num_epochs,
-                  dim_dropout]
-    default_parameters = [1e-5, 1, 16, 50, 1.0]
+                  dim_num_dense_nodes,
+                  dim_dropout,
+                  dim_window,
+                  dim_activation]
+    default_parameters = [0.00045, 3, 1024, 0.25, 8, 'elu']
 
     best_accuracy = 0.0
     call_num = 0
@@ -265,7 +280,8 @@ if __name__ == "__main__":
     res_gp = skopt.gp_minimize(func=fitness,
                             dimensions=dimensions,
                             acq_func='EI', # Expected Improvement.
-                            n_calls=args.iter)
+                            n_calls=args.iter,
+                            x0=default_parameters)
     
     print("Best score=%.4f" % res_gp.fun)
     print("""Best parameters:
@@ -283,3 +299,12 @@ if __name__ == "__main__":
     # text = ''.join(c.upper() if p == 1 else c for c,p in zip(test.text, predictions))
 
     # print(text)
+
+
+    # learning rate: 4.6e-04
+    # num_dense_layers: 3
+    # num_dense_nodes: 995
+    # num_epochs: 5
+    # dropout: 2.5e-01
+    # window: 6
+    # activation: relu

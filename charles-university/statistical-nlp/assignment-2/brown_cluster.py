@@ -2,9 +2,6 @@
 # https://github.com/percyliang/brown-cluster
 
 import random
-import argparse
-import glob
-import re
 import itertools
 import logging
 from collections import defaultdict, Counter
@@ -15,6 +12,7 @@ from scipy.special import comb
 random.seed(100)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s\t%(message)s')
+
 
 class LmCluster(object):
     def __init__(self, tokens, word_cutoff=10, cluster_cutoff=1):
@@ -44,7 +42,7 @@ class LmCluster(object):
         # find the most frequent words
         self.vocab = {}
         self.reverse_vocab = []
- 
+
         # create sets of documents that each word appears in
         self.create_vocab()
         self.create_index()
@@ -53,13 +51,13 @@ class LmCluster(object):
         self.classes = [word for word in list(range(len(self.vocab))) if self.counts[word] >= self.word_cutoff]
         # self.classes = list(range(len(self.vocab)))
         logging.info('Starting classes: ' + str(len(self.classes)))
-        
+
         self.initialize_tables()
 
         with tqdm(total=len(self.classes) - self.cluster_cutoff, unit='class') as t:
             while len(self.classes) > self.cluster_cutoff:
-                c1, c2 = self.find_best() # find the best pair of words/clusters to merge
-                c_new = self.merge(c1, c2) # merge the clusters in the index
+                c1, c2 = self.find_best()  # find the best pair of words/clusters to merge
+                c_new = self.merge(c1, c2)  # merge the clusters in the index
 
                 self.cluster_counter += 1
                 t.update(1)
@@ -98,14 +96,14 @@ class LmCluster(object):
         # edges to and from a single node
         for c in self.classes:
             self.w[c][c] = self.compute_weight([c], [c])
-        
+
         # print(sum(self.w[c1][c2] for c1 in self.w for c2 in self.w[c1]))
 
         # classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
         classes = self.classes
         total = comb(len(classes), 2, exact=True)
         for c1, c2 in tqdm(itertools.combinations(classes, 2), total=total, unit='pairs'):
-            self.compute_L(c1, c2)
+            self.compute_l(c1, c2)
 
     def compute_weight(self, nodes1, nodes2):
         paircount = sum(self.trans[n1][n2] for n1 in nodes1 for n2 in nodes2)
@@ -118,7 +116,7 @@ class LmCluster(object):
 
         return (paircount / self.num_tokens) * log(paircount * self.num_tokens / count_1 / count_2, 2)
 
-    def compute_L(self, c1, c2):
+    def compute_l(self, c1, c2):
         val = 0.0
 
         # classes = classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
@@ -167,9 +165,9 @@ class LmCluster(object):
             raise ValueError("bad value for score: {}".format(best_score))
 
         # break ties randomly (randint takes inclusive args!)
-#         c1, c2 = argmax[random.randint(0, len(argmax) - 1)]
+        #         c1, c2 = argmax[random.randint(0, len(argmax) - 1)]
         c1, c2 = argmax[0]
-    
+
         return c1, c2
 
     def merge(self, c1, c2):
@@ -249,7 +247,7 @@ class LmCluster(object):
 
         # compute scores for merging it with all clusters in the current batch
         for d in self.classes:
-            self.compute_L(d, c_new)
+            self.compute_l(d, c_new)
 
         # now add it to the batch
         self.classes.append(c_new)
@@ -267,22 +265,26 @@ class LmCluster(object):
         with open(output_path, 'w') as f:
             for w in self.vocab:
                 # convert the counts back to ints when printing
-                f.write("{}\t{}\t{}\n".format(w, self.get_bitstring(w),self.counts[self.vocab[w]]))
-    
+                f.write("{}\t{}\t{}\n".format(w, self.get_bitstring(w), self.counts[self.vocab[w]]))
+
     def print_clusters(self):
         for w in self.vocab:
             print("{}\t{}\t{}".format(w, self.get_bitstring(w), self.counts[self.vocab[w]]))
+
+
+def preprocess(word):
+    return word.strip()
+
 
 def open_text(filename):
     """Reads a text line by line, applies light preprocessing, and returns an array of words"""
     with open(filename, encoding='iso-8859-2') as f:
         content = f.readlines()
-    
-    preprocess = lambda word: word.strip()
-    
+
     return [preprocess(word) for word in content]
 
-if __name__ == '__main__': 
+
+if __name__ == '__main__':
     english = './TEXTEN1.txt'
     words = open_text(english)
 

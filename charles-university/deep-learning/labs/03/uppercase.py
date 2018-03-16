@@ -102,8 +102,9 @@ class Network:
 
             # Define a suitable network with appropriate loss function
             hidden_layer = tf.layers.flatten(tf.one_hot(self.windows, args.alphabet_size))
-            for _ in range(args.num_dense_layers):
-                hidden_layer = tf.layers.dense(hidden_layer, args.num_dense_nodes, activation=activations[args.activation])
+
+            for node in args.nodes:
+                hidden_layer = tf.layers.dense(hidden_layer, node, activation=activations[args.activation])
                 hidden_layer = tf.contrib.layers.layer_norm(hidden_layer)
                 hidden_layer = tf.layers.dropout(hidden_layer, args.dropout, training=self.is_training)
 
@@ -154,14 +155,16 @@ class Network:
             self.actions = tf.get_collection("end_points/labels")[0]
 
     def evaluate(self, dataset, windows, labels):
+        windows, labels = np.array_split(windows, 2)[0], np.array_split(labels, 2)[0]
         acc, _ = self.session.run([self.accuracy, self.summaries[dataset]], {self.windows: windows, self.labels: labels})
         return acc
 
     def predict(self, windows):
         return self.session.run(self.predictions, {self.windows: windows, self.labels: []})
 
+
 def test_network(train, dev, args, logdir, activations):
-    accuracy_threshold = 0.974
+    accuracy_threshold = 0.972
 
     # Construct the network
     network = Network(threads=args.threads)
@@ -175,20 +178,20 @@ def test_network(train, dev, args, logdir, activations):
                 windows, labels = train.next_batch(args.batch_size)
                 network.train(windows, labels)
                 pbar.update(len(windows))
-
         dev_windows, dev_labels = dev.all_data()
         acc = network.evaluate("dev", dev_windows, dev_labels)
 
-        if acc < accuracy_threshold and i > 0:
+        if acc < accuracy_threshold and i > 1:
             return network, acc
 
     accuracy = network.evaluate("dev", dev_windows, dev_labels)
     return network, accuracy
 
+
 def fitness(x):
     global call_num, best_accuracy, activations
 
-    args.learning_rate, args.num_dense_layers, args.num_dense_nodes, args.dropout, args.window, args.activation = x
+    args.learning_rate, args.dropout, args.window, args.activation, *args.nodes = x
 
     call_num += 1
 
@@ -217,8 +220,7 @@ def fitness(x):
         print('New best')
         print('Accuracy: {:.4f}'.format(accuracy))
         print('learning rate: {0:.2e}'.format(args.learning_rate))
-        print('num_dense_layers:', args.num_dense_layers)
-        print('num_dense_nodes:', args.num_dense_nodes)
+        print('nodes:', args.nodes)
         print('num_epochs:', args.epochs)
         print('dropout: {0:.2e}'.format(args.dropout))
         print('window:', args.window)
@@ -227,10 +229,46 @@ def fitness(x):
         network.save('upperacase/model')
         best_accuracy = accuracy
 
+        # Generate the uppercased test set
+        test_windows, _ = test.all_data()
+        predictions = network.predict(test_windows)
+        text = ''.join(c.upper() if p == 1 else c for c,p in zip(test.text, predictions))
+
+        with open('uppercase_data_eval.txt', 'w') as f:
+            print(text, file=f)
+
     network.session.close()
     del network
 
     return 1.0 - accuracy
+
+
+def optimize(args):
+    bounds = [(3000, 5000), (2000, 4000), (2000, 3000), (1000, 2000), (500, 1500), (250, 1000), (100, 500)]
+    architecture = [4000, 3000, 2000, 1500, 1024, 512, 256]
+
+    dim_learning_rate = skopt.space.Real(low=1e-6, high=1e-2, prior='log-uniform')
+    dim_dropout = skopt.space.Real(low=0.0, high=0.4)
+    dim_window = skopt.space.Integer(low=5, high=20)
+    dim_activation = skopt.space.Categorical(activations.keys())
+    dim_architecture = [skopt.space.Integer(low=low, high=high) for low, high in bounds]
+
+    dimensions = [dim_learning_rate,
+                  dim_dropout,
+                  dim_window,
+                  dim_activation,
+                  *dim_architecture]
+
+    default_parameters = [0.0035, 0.5, 6, 'selu', *architecture]
+
+    skopt.forest_minimize
+
+    res_gp = skopt.gp_minimize(func=fitness,
+                            dimensions=dimensions,
+                            acq_func='EI', # Expected Improvement.
+                            n_calls=args.iter,
+                            x0=default_parameters)
+
 
 if __name__ == "__main__":
     import argparse
@@ -243,17 +281,17 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--alphabet_size", default=200, type=int, help="Alphabet size.")
+    parser.add_argument("--alphabet_size", default=100, type=int, help="Alphabet size.")
     parser.add_argument("--batch_size", default=512, type=int, help="Batch size.")
-    parser.add_argument("--iter", default=1000, type=int, help="Number of iterations.")
-    parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=15, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=4, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--window", default=10, type=int, help="Size of the window to use.")
+    parser.add_argument("--window", default=6, type=int, help="Size of the window to use.")
 
-    parser.add_argument("--dropout", default=0.1, type=float)
-    parser.add_argument("--learning_rate", default=0.001, type=float)
-    parser.add_argument("--num_dense_layers", default=2, type=int)
-    parser.add_argument("--num_dense_nodes", default=300, type=int)
+    parser.add_argument("--iter", default=100, type=int, help="Number of iterations.")
+    parser.add_argument("--dropout", default=0.5, type=float)
+    parser.add_argument("--learning_rate", default=0.0035, type=float)
+    parser.add_argument("--activation", default="selu", type=str)
+    parser.add_argument("--nodes", default=[4000, 3000, 2000, 1500, 1024, 512, 256], type=int, nargs='+')
 
     args = parser.parse_args()
 
@@ -264,55 +302,19 @@ if __name__ == "__main__":
         'selu': tf.nn.selu
     }
 
-    dim_learning_rate = skopt.space.Real(low=1e-6, high=1e-2, prior='log-uniform', name='learning_rate')
-    dim_num_dense_layers = skopt.space.Integer(low=1, high=6, name='num_dense_layers')
-    dim_num_dense_nodes = skopt.space.Integer(low=200, high=4096, name='num_dense_nodes')
-    # dim_num_epochs = skopt.space.Integer(low=1, high=5, name='num_epochs')
-    dim_dropout = skopt.space.Real(low=0.0, high=0.4, name='dropout')
-    dim_window = skopt.space.Integer(low=5, high=20, name='window')
-    dim_activation = skopt.space.Categorical(activations.keys(), name='activation')
-
-    dimensions = [dim_learning_rate,
-                  dim_num_dense_layers,
-                  dim_num_dense_nodes,
-                  dim_dropout,
-                  dim_window,
-                  dim_activation]
-    default_parameters = [0.00045, 3, 1024, 0.3, 8, 'elu']
-
     best_accuracy = 0.0
     call_num = 0
 
-    skopt.forest_minimize
+    # optimize(args)
 
-    res_gp = skopt.gp_minimize(func=fitness,
-                            dimensions=dimensions,
-                            acq_func='EI', # Expected Improvement.
-                            n_calls=args.iter,
-                            x0=default_parameters)
+    architecture = [4000, 3000, 2000, 1500, 1024, 512, 256]
+    trials = [
+        [0.0035, 0.50, 6, 'selu', *architecture],
+        [0.0010, 0.50, 6, 'selu', *architecture],
+        [0.0025, 0.50, 6, 'selu', *architecture],
+        [0.0020, 0.50, 6, 'selu', *architecture],
+    ]
+
+    for trial in trials:
+        fitness(trial)
     
-    print("Best score=%.4f" % res_gp.fun)
-    print("""Best parameters:
-            - learning_rate=%d
-            - num_dense_layers=%.6f
-            - num_dense_nodes=%d
-            - num_epochs=%d
-            - dropout=%d""" % (res_gp.x[0], res_gp.x[1], 
-                                        res_gp.x[2], res_gp.x[3], 
-                                        res_gp.x[4]))
-    
-    # # Generate the uppercased test set
-    # test_windows, _ = test.all_data()
-    # predictions = network.predict(test_windows)
-    # text = ''.join(c.upper() if p == 1 else c for c,p in zip(test.text, predictions))
-
-    # print(text)
-
-
-    # learning rate: 4.6e-04
-    # num_dense_layers: 3
-    # num_dense_nodes: 995
-    # num_epochs: 5
-    # dropout: 2.5e-01
-    # window: 6
-    # activation: relu

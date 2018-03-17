@@ -226,7 +226,7 @@ def fitness(x):
         print('window:', args.window)
         print('activation:', args.activation)
 
-        network.save('upperacase/model')
+        network.save('uppercase/model')
         best_accuracy = accuracy
 
         # Generate the uppercased test set

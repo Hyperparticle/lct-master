@@ -1,7 +1,10 @@
 **/hw03/*.csv
 **/hw03/*.txt
 **/hw04/data/*
+**/uppercase/model*
+**/uppercase/checkpoint
 
 __pycache__/
 
 **/.idea/
+

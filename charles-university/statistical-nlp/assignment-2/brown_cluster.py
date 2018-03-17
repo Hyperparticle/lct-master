@@ -1,14 +1,13 @@
 # https://github.com/mheilman/tan-clustering
 # https://github.com/percyliang/brown-cluster
 
-import random
-import itertools
 from collections import defaultdict, Counter, Iterable
-from math import isnan, isinf
 from tqdm import tqdm
 from scipy.special import comb
 import pandas as pd
 import numpy as np
+import math
+import itertools
 
 
 class LmCluster(object):
@@ -26,21 +25,25 @@ class LmCluster(object):
         # self.cluster_bits = {}  # the bit to add when walking up the hierarchy from a word to the top-level cluster
         self.cluster_counter = len(self.word2int)
 
-        self.classes = [word for word in range(len(self.word2int)) if self.word_counts[word] >= self.word_cutoff]
+        # Only consider classes of words that appear in the text above a threshold frequency
+        self.classes = [word for word in self.word_counts if self.word_counts[word] >= self.word_cutoff]
 
-        # classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
-        # classes = self.classes
-
-        # The graph weights W and the results of merging nodes L (Liang's thesis)
+        # Weight table W and merge loss table L (Liang's thesis)
         self.W = self.build_w(self.classes)
         self.L = self.build_l(self.classes)
 
         print('Word tokens: {}'.format(self.num_tokens))
         print('Starting classes: {}'.format(len(self.classes)))
-        print('Starting MI:', sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1]))
+        s1 = sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1])
+        print('Starting MI:', s1)
 
-        scores = sorted([(*self.class_name([c1, c2]), score) for c1 in self.L for c2, score in self.L[c1].items()],
+        scores = sorted([(*self.class_name([c1, c2]), self.L[c1][c2]) for c1, c2 in itertools.combinations(self.classes, 2)],
                         key=lambda s: s[2], reverse=True)[:20]
+
+        self.merge_classes(self.word2int['cannot'], self.word2int['may'])
+
+        s2 = sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1])
+        print('Next MI:', s1 - s2)
 
         print('\n'.join([str(s) for s in scores]))
 
@@ -65,15 +68,14 @@ class LmCluster(object):
     @staticmethod
     def freq_dist(tokens):
         counts = Counter(tokens)
-        # word_set = sorted(counts.keys(), key=lambda word: counts[word], reverse=True)
-        word_set = counts.keys()
+        word_set = sorted(counts.keys(), key=lambda word: counts[word], reverse=True)
 
         word2int = {}
         word_counts = defaultdict(int)
 
         for i, w in enumerate(word_set):
             word2int[w] = i
-            word_counts[word2int[w]] = counts[w]
+            word_counts[i] = counts[w]
 
         int2word = sorted(word2int.keys(), key=lambda word: word2int[word])
 
@@ -86,13 +88,13 @@ class LmCluster(object):
     def build_w(self, classes):
         W = defaultdict(lambda: defaultdict(float))
 
-        # edges between nodes
+        # Edges between classes
         for c1, c2 in itertools.combinations(classes, 2):
-            W[c1][c2] = self.compute_weight([c1], [c2]) + self.compute_weight([c2], [c1])
+            W[c1][c2] = self.mutual_information([c1], [c2]) + self.mutual_information([c2], [c1])
 
-        # edges to and from a single node
+        # Edges to and from a single class
         for c in classes:
-            W[c][c] = self.compute_weight([c], [c])
+            W[c][c] = self.mutual_information([c], [c])
 
         return W
 
@@ -101,76 +103,66 @@ class LmCluster(object):
 
         total = comb(len(classes), 2, exact=True)
         for c1, c2 in tqdm(itertools.combinations(classes, 2), total=total, unit='pairs'):
-            L[c1][c2] = self.compute_l(c1, c2)
+            L[c1][c2] = self.mi_loss(c1, c2)
 
         return L
 
-    def compute_weight(self, nodes1, nodes2):
-        paircount = sum(self.bigram_counts[n1][n2] for n1 in nodes1 for n2 in nodes2)
+    def mutual_information(self, left, right):
+        """Calculates the mutual information in the left and right classes"""
 
-        if not paircount:
+        bigram_count = sum(self.bigram_counts[c1][c2] for c1 in left for c2 in right)
+
+        if not bigram_count:
             return 0.0
 
-        count_1 = sum(self.word_counts[n] for n in nodes1)
-        count_2 = sum(self.word_counts[n] for n in nodes2)
+        left_count = sum(self.word_counts[c] for c in left)
+        right_count = sum(self.word_counts[c] for c in right)
 
-        return (paircount / self.num_tokens) * np.log2(paircount * self.num_tokens / count_1 / count_2)
+        return (bigram_count / self.num_tokens) * np.log2(bigram_count * self.num_tokens / left_count / right_count)
 
-    def compute_l(self, c1, c2):
-        val = 0.0
+    def mi_loss(self, c1, c2):
+        """Calculate the mutual information lost if the two classes are merged"""
 
-        # classes = classes = [c for c in self.classes if self.counts[c] >= self.word_cutoff]
         classes = self.classes
+        mi_loss = 0.0
 
-        # add the weight of edges coming in to the potential
-        # new cluster from other nodes
-        # TODO this is slow
+        # Add the weight of edges coming in to the potential new cluster from other nodes
         for d in classes:
-            val += self.compute_weight([c1, c2], [d])
-            val += self.compute_weight([d], [c1, c2])
+            mi_loss += self.mutual_information([c1, c2], [d])
+            mi_loss += self.mutual_information([d], [c1, c2])
 
-        # ... but don't include what will be part of the new cluster
+        # Don't include what will be part of the new cluster
         for d in [c1, c2]:
-            val -= self.compute_weight([c1, c2], [d])
-            val -= self.compute_weight([d], [c1, c2])
+            mi_loss -= self.mutual_information([c1, c2], [d])
+            mi_loss -= self.mutual_information([d], [c1, c2])
 
-        # add the weight of the edge from the potential new cluster
-        # to itself
-        val += self.compute_weight([c1, c2], [c1, c2])
+        # Add the weight of the edge from the potential new cluster to itself
+        mi_loss += self.mutual_information([c1, c2], [c1, c2])
 
-        # subtract the weight of edges to/from c1, c2
-        # (which would be removed)
+        # Subtract the weight of edges c1, c2 which will be removed
         for d in classes:
             for c in [c1, c2]:
                 if d in self.W[c]:
-                    val -= self.W[c][d]
+                    mi_loss -= self.W[c][d]
                 elif c in self.W[d]:
-                    val -= self.W[d][c]
+                    mi_loss -= self.W[d][c]
 
-        return val
+        return mi_loss
 
     def find_best_merge(self):
-        best_score = float('-inf')
-        argmax = None
+        best_loss = float('-inf')
+        best_merge = None
 
         for c1 in self.L:
-            for c2, score in self.L[c1].items():
-                if score > best_score:
-                    argmax = [(c1, c2)]
-                    best_score = score
-                elif score == best_score:
-                    argmax.append((c1, c2))
+            for c2, mi_loss in self.L[c1].items():
+                if mi_loss > best_loss:
+                    best_loss = mi_loss
+                    best_merge = c1, c2
 
-        if isnan(best_score) or isinf(best_score):
-            raise ValueError("bad value for score: {}".format(best_score))
+        if math.isnan(best_loss) or math.isinf(best_loss):
+            print('Bad MI loss', best_loss)
 
-        # break ties randomly (randint takes inclusive args!)
-        #         c1, c2 = argmax[random.randint(0, len(argmax) - 1)]
-        c1, c2 = argmax[0]
-
-        # print('{0: <10} + {1: <10} -> {2: <10}'.format(*self.class_name([c1, c2]), self.cluster_counter))
-
-        return c1, c2
+        return best_merge
 
     def merge_classes(self, c1, c2):
         c_new = self.cluster_counter
@@ -195,8 +187,8 @@ class LmCluster(object):
         for c in [c1, c2]:
             for d1 in self.L:
                 for d2 in self.L[d1]:
-                    self.L[d1][d2] -= self.compute_weight([d1, d2], [c])
-                    self.L[d1][d2] -= self.compute_weight([c], [d1, d2])
+                    self.L[d1][d2] -= self.mutual_information([d1, d2], [c])
+                    self.L[d1][d2] -= self.mutual_information([c], [d1, d2])
 
         # remove merged clusters from the counts and transitions dictionaries
         # to save memory (but keep frequencies for words for the final output)
@@ -229,27 +221,26 @@ class LmCluster(object):
         self.classes.remove(c2)
 
         # add the new cluster to the w and L tables
-        self.add_to_batch(c_new)
+        self.update_tables(c_new)
 
         return c_new
 
-    def add_to_batch(self, c_new):
-        # compute weights for edges connected to the new node
+    def update_tables(self, c_new):
+        # Compute weights for edges connected to the new node
         for d in self.classes:
-            self.W[d][c_new] = self.compute_weight([d], [c_new])
-            self.W[d][c_new] = self.compute_weight([c_new], [d])
-        self.W[c_new][c_new] = self.compute_weight([c_new], [c_new])
+            self.W[d][c_new] = self.mutual_information([d], [c_new])
+            self.W[d][c_new] = self.mutual_information([c_new], [d])
+        self.W[c_new][c_new] = self.mutual_information([c_new], [c_new])
 
-        # add the weights from this new node to the merge score table
-        # TODO this is slow
+        # Add the weights from this new node to the merge score table
         for d1 in self.L:
             for d2 in self.L[d1]:
-                self.L[d1][d2] += self.compute_weight([d1, d2], [c_new])
-                self.L[d1][d2] += self.compute_weight([c_new], [d1, d2])
+                self.L[d1][d2] += self.mutual_information([d1, d2], [c_new])
+                self.L[d1][d2] += self.mutual_information([c_new], [d1, d2])
 
-        # compute scores for merging it with all clusters in the current batch
+        # Compute scores for merging it with all clusters in the current batch
         for d in self.classes:
-            self.compute_l(d, c_new)
+            self.L[d][c_new] = self.mi_loss(d, c_new)
 
         # now add it to the batch
         self.classes.append(c_new)
@@ -291,8 +282,6 @@ def history(cluster):
 
 
 if __name__ == '__main__':
-    random.seed(100)
-
     english = './TEXTEN1.txt'
     words_en = open_text(english)
 

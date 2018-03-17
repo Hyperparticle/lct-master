@@ -283,13 +283,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--alphabet_size", default=100, type=int, help="Alphabet size.")
     parser.add_argument("--batch_size", default=512, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=15, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=4, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--window", default=6, type=int, help="Size of the window to use.")
+    parser.add_argument("--window", default=8, type=int, help="Size of the window to use.")
 
     parser.add_argument("--iter", default=100, type=int, help="Number of iterations.")
     parser.add_argument("--dropout", default=0.5, type=float)
-    parser.add_argument("--learning_rate", default=0.0035, type=float)
+    parser.add_argument("--learning_rate", default=0.001, type=float)
     parser.add_argument("--activation", default="selu", type=str)
     parser.add_argument("--nodes", default=[4000, 3000, 2000, 1500, 1024, 512, 256], type=int, nargs='+')
 
@@ -309,10 +309,7 @@ if __name__ == "__main__":
 
     architecture = [4000, 3000, 2000, 1500, 1024, 512, 256]
     trials = [
-        [0.0035, 0.50, 6, 'selu', *architecture],
-        [0.0010, 0.50, 6, 'selu', *architecture],
-        [0.0025, 0.50, 6, 'selu', *architecture],
-        [0.0020, 0.50, 6, 'selu', *architecture],
+        [0.001, 0.50, 8, 'selu', *architecture],
     ]
 
     for trial in trials:

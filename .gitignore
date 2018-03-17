@@ -3,3 +3,5 @@
 **/hw04/data/*
 
 __pycache__/
+
+**/.idea/

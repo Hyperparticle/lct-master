@@ -22,7 +22,7 @@ class Network:
             self.is_training = tf.placeholder(tf.bool, [], name="is_training")
 
             # Computation
-            # TODO: Add layers described in the args.cnn. Layers are separated by a comma and
+            # Add layers described in the args.cnn. Layers are separated by a comma and
             # in addition to the ones allowed in mnist_conv.py you should also support
             # - CB-filters-kernel_size-stride-padding: Add a convolutional layer with BatchNorm
             #   and ReLU activation and specified number of filters, kernel size, stride and padding.
@@ -38,13 +38,35 @@ class Network:
             #   or (preferably) attached to `self.train` using `tf.control_dependencies`.
             # Store result in `features`.
 
+            features = self.images
+            for layer in args.cnn.split(','):
+                if layer.startswith('C'):
+                    filters, kernel_size, stride, padding = layer.split('-')[1:]
+
+                    if layer.startswith('CB'):
+                        features = tf.layers.conv2d(features, int(filters), int(kernel_size), int(stride), padding, activation=None, use_bias=False)
+                        features = tf.layers.batch_normalization(features, training=self.is_training)
+                        features = tf.nn.relu(features)
+                    else:
+                        features = tf.layers.conv2d(features, int(filters), int(kernel_size), int(stride), padding, activation=tf.nn.relu)
+                elif layer.startswith('M'):
+                    kernel_size, stride = layer.split('-')[1:]
+                    features = tf.layers.max_pooling2d(features, int(kernel_size), int(stride))
+                elif layer.startswith('F'):
+                    features = tf.contrib.layers.flatten(features)
+                elif layer.startswith('R'):
+                    hidden_layer_size = layer.split('-')[1]
+                    features = tf.layers.dense(features, int(hidden_layer_size), activation=tf.nn.relu)
+
             output_layer = tf.layers.dense(features, self.LABELS, activation=None, name="output_layer")
             self.predictions = tf.argmax(output_layer, axis=1)
 
             # Training
             loss = tf.losses.sparse_softmax_cross_entropy(self.labels, output_layer, scope="loss")
             global_step = tf.train.create_global_step()
-            self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
 
             # Summaries
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
@@ -64,10 +86,10 @@ class Network:
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def train(self, images, labels):
-        self.session.run([self.training, self.summaries["train"]], {self.images: images, self.labels: labels})
+        self.session.run([self.training, self.summaries["train"]], {self.images: images, self.labels: labels, self.is_training: True})
 
     def evaluate(self, dataset, images, labels):
-        accuracy, _ = self.session.run([self.accuracy, self.summaries[dataset]], {self.images: images, self.labels: labels})
+        accuracy, _ = self.session.run([self.accuracy, self.summaries[dataset]], {self.images: images, self.labels: labels, self.is_training: False})
         return accuracy
 
 

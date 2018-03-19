@@ -22,13 +22,27 @@ class Network:
             self.is_training = tf.placeholder(tf.bool, [], name="is_training")
 
             # Computation
-            # TODO: Add layers described in the args.cnn. Layers are separated by a comma and can be:
+            # Add layers described in the args.cnn. Layers are separated by a comma and can be:
             # - C-filters-kernel_size-stride-padding: Add a convolutional layer with ReLU activation and
             #   specified number of filters, kernel size, stride and padding. Example: C-10-3-1-same
             # - M-kernel_size-stride: Add max pooling with specified size and stride. Example: M-3-2
             # - F: Flatten inputs
             # - R-hidden_layer_size: Add a dense layer with ReLU activation and specified size. Ex: R-100
             # Store result in `features`.
+
+            features = self.images
+            for layer in args.cnn.split(','):
+                if layer.startswith('C'):
+                    filters, kernel_size, stride, padding = layer.split('-')[1:]
+                    features = tf.layers.conv2d(features, int(filters), int(kernel_size), int(stride), padding, activation=tf.nn.relu)
+                elif layer.startswith('M'):
+                    kernel_size, stride = layer.split('-')[1:]
+                    features = tf.layers.max_pooling2d(features, int(kernel_size), int(stride))
+                elif layer.startswith('F'):
+                    features = tf.contrib.layers.flatten(features)
+                elif layer.startswith('R'):
+                    hidden_layer_size = layer.split('-')[1]
+                    features = tf.layers.dense(features, int(hidden_layer_size), activation=tf.nn.relu)
 
             output_layer = tf.layers.dense(features, self.LABELS, activation=None, name="output_layer")
             self.predictions = tf.argmax(output_layer, axis=1)

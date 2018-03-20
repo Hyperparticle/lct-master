@@ -2,18 +2,26 @@
 import os
 import numpy as np
 import keras
-from keras.datasets import mnist
+from tensorflow.examples.tutorials import mnist
 from capsnet import CapsNet
 
 def load_mnist():
-    # the data, shuffled and split between train and test sets
-    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    data = mnist.input_data.read_data_sets('mnist', reshape=False, seed=42)
+    gan_data = mnist.input_data.read_data_sets('mnist-gan', reshape=False, seed=42)
 
-    x_train = x_train.reshape(-1, 28, 28, 1).astype('float32') / 255.
-    x_test = x_test.reshape(-1, 28, 28, 1).astype('float32') / 255.
-    y_train = keras.utils.to_categorical(y_train.astype('float32'))
-    y_test = keras.utils.to_categorical(y_test.astype('float32'))
-    return (x_train, y_train), (x_test, y_test)
+    x_train = np.concatenate((data.train.images, data.validation.images, data.test.images,
+                              gan_data.train.images))
+    y_train = np.concatenate((data.train.labels, data.validation.labels, data.test.labels,
+                              gan_data.train.labels))
+    
+    x_val = gan_data.validation.images
+    y_val = gan_data.validation.labels
+
+    x_test = gan_data.test.images
+
+    y_train, y_val = keras.utils.to_categorical(y_train), keras.utils.to_categorical(y_val)
+
+    return (x_train, y_train), (x_val, y_val), x_test
 
 if __name__ == "__main__":
     import argparse
@@ -52,15 +60,18 @@ if __name__ == "__main__":
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    (x_train, y_train), (x_test, y_test) = load_mnist()
+    (x_train, y_train), (x_val, y_val), x_test = load_mnist()
+
+    # n_class = 10
+    n_class = len(np.unique(np.argmax(y_val, 1)))
 
     model = CapsNet(input_shape=x_train.shape[1:], 
-                    n_class=len(np.unique(np.argmax(y_train, 1))), 
+                    n_class=n_class, 
                     routings=args.routings)
 
-    # model.train(data=((x_train, y_train), (x_test, y_test)), args=args)
+    model.train(data=((x_train, y_train), (x_val, y_val)), args=args)
 
-    accuracy = model.evaluate(data=(x_test, y_test))
+    accuracy = model.evaluate(data=(x_val, y_val))
 
     predictions = model.predict(x_test)
 

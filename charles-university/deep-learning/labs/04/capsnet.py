@@ -1,6 +1,5 @@
 import numpy as np
 import tensorflow as tf
-import keras
 
 
 class CapsNet:
@@ -15,31 +14,31 @@ class CapsNet:
             self.train_model.load_weights(self.model_filename)
 
     def construct(self, input_shape, classes):
-        x = keras.layers.Input(input_shape)
+        x = tf.keras.layers.Input(input_shape)
 
-        conv1 = keras.layers.Conv2D(256, kernel_size=9, strides=1, padding='valid', activation='relu')(x)
-        primary_caps = keras.layers.Conv2D(8 * 32, kernel_size=9, strides=2, padding='valid')(conv1)
-        primary_caps = keras.layers.Reshape([-1, 8])(primary_caps)
-        primary_caps = keras.layers.Lambda(squash)(primary_caps)
+        conv1 = tf.keras.layers.Conv2D(256, kernel_size=9, strides=1, padding='valid', activation='relu')(x)
+        primary_caps = tf.keras.layers.Conv2D(8 * 32, kernel_size=9, strides=2, padding='valid')(conv1)
+        primary_caps = tf.keras.layers.Reshape([-1, 8])(primary_caps)
+        primary_caps = tf.keras.layers.Lambda(squash)(primary_caps)
 
         caps = CapsuleLayer(classes, 16)(primary_caps)
 
-        output_caps = keras.layers.Lambda(
+        output_caps = tf.keras.layers.Lambda(
             lambda inputs: tf.sqrt(tf.reduce_sum(tf.square(inputs), -1)),
             name='capsnet')(caps)
 
-        y = keras.layers.Input((classes,))
+        y = tf.keras.layers.Input((classes,))
         masked_train = Mask()([caps, y])
         masked = Mask()(caps)
 
-        decoder = keras.models.Sequential()
-        decoder.add(keras.layers.Dense(512, activation='relu', input_dim=16 * classes))
-        decoder.add(keras.layers.Dense(1024, activation='relu'))
-        decoder.add(keras.layers.Dense(np.prod(input_shape), activation='sigmoid'))
-        decoder.add(keras.layers.Reshape(target_shape=input_shape, name='reconstruction'))
+        decoder = tf.keras.models.Sequential()
+        decoder.add(tf.keras.layers.Dense(512, activation='relu', input_dim=16 * classes))
+        decoder.add(tf.keras.layers.Dense(1024, activation='relu'))
+        decoder.add(tf.keras.layers.Dense(np.prod(input_shape), activation='sigmoid'))
+        decoder.add(tf.keras.layers.Reshape(target_shape=input_shape, name='reconstruction'))
 
-        train_model = keras.models.Model([x, y], [output_caps, decoder(masked_train)])
-        eval_model = keras.models.Model(x, [output_caps, decoder(masked)])
+        train_model = tf.keras.models.Model([x, y], [output_caps, decoder(masked_train)])
+        eval_model = tf.keras.models.Model(x, [output_caps, decoder(masked)])
 
         self.train_model, self.eval_model = train_model, eval_model
 
@@ -48,19 +47,19 @@ class CapsNet:
 
         (x_train, y_train), (x_test, y_test) = data
 
-        tb = keras.callbacks.TensorBoard(log_dir='./logs',
-                                         batch_size=args.batch_size,
-                                         histogram_freq=1)
-        checkpoint = keras.callbacks.ModelCheckpoint(self.model_filename, monitor='val_capsnet_acc',
-                                                     save_best_only=True, save_weights_only=True, verbose=1)
-        learn_rate_decay = keras.callbacks.LearningRateScheduler(
+        tb = tf.keras.callbacks.TensorBoard(log_dir='./logs',
+                                            batch_size=args.batch_size,
+                                            histogram_freq=1)
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(self.model_filename, monitor='val_capsnet_acc',
+                                                        save_best_only=True, save_weights_only=True, verbose=1)
+        learn_rate_decay = tf.keras.callbacks.LearningRateScheduler(
             schedule=lambda epoch: args.learn_rate * (args.learn_rate_decay ** epoch))
 
         margin_loss = lambda true, pred: tf.reduce_mean(tf.reduce_sum(
             true * tf.square(tf.maximum(0., 0.9 - pred)) +
             0.5 * (1 - true) * tf.square(tf.maximum(0., pred - 0.1)), 1))
 
-        model.compile(optimizer=keras.optimizers.Adam(lr=args.learn_rate),
+        model.compile(optimizer=tf.keras.optimizers.Adam(lr=args.learn_rate),
                       loss=[margin_loss, 'mse'],
                       loss_weights=[1., 0.392],
                       metrics={'capsnet': 'accuracy'})
@@ -89,7 +88,7 @@ class CapsNet:
         return np.argmax(y_pred, 1)
 
 
-class CapsuleLayer(keras.layers.Layer):
+class CapsuleLayer(tf.keras.layers.Layer):
     """Capsule layer with vector outputs (instead of traditional scalar values)"""
     def __init__(self, num_capsule, dim_capsule,
                  kernel_initializer='glorot_uniform',
@@ -99,7 +98,7 @@ class CapsuleLayer(keras.layers.Layer):
         self.num_capsule = num_capsule
         self.dim_capsule = dim_capsule
         self.routings = 3
-        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.kernel_initializer = tf.keras.initializers.get(kernel_initializer)
 
     def build(self, input_shape):
         self.input_num_capsule = input_shape[1]
@@ -129,7 +128,7 @@ class CapsuleLayer(keras.layers.Layer):
         return tuple([None, self.num_capsule, self.dim_capsule])
 
 
-class Mask(keras.layers.Layer):
+class Mask(tf.keras.layers.Layer):
     """Mask the vectors so that the true label wins out"""
     def call(self, inputs, **kwargs):
         if type(inputs) is list:

@@ -1,145 +1,164 @@
+import numpy as np
 import tensorflow as tf
+import math
+from capsule_layer import CapsuleLayer, PrimaryCap, Length, Mask
+import keras
+from keras.preprocessing.image import ImageDataGenerator
 
-from config import cfg
-from utils import get_batch_data
-from utils import softmax
-from utils import reduce_sum
-from caps_layer import CapsLayer
-
-
-epsilon = 1e-9
+keras.backend.set_image_data_format('channels_last')
 
 
-class CapsNet(object):
-    def __init__(self, is_training=True):
-        self.graph = tf.Graph()
-        with self.graph.as_default():
-            if is_training:
-                self.X, self.labels = get_batch_data(cfg.dataset, cfg.batch_size, cfg.num_threads)
-                self.Y = tf.one_hot(self.labels, depth=10, axis=1, dtype=tf.float32)
+def CapsNet(input_shape, n_class, routings):
+    """
+    A Capsule Network on MNIST.
+    :param input_shape: data shape, 3d, [width, height, channels]
+    :param n_class: number of classes
+    :param routings: number of routing iterations
+    :return: Two Keras Models, the first one used for training, and the second one for evaluation.
+            `eval_model` can also be used for training.
+    """
+    x = keras.layers.Input(shape=input_shape)
 
-                self.build_arch()
-                self.loss()
-                self._summary()
+    # Layer 1: Just a conventional Conv2D layer
+    conv1 = keras.layers.Conv2D(filters=256, kernel_size=9, strides=1, padding='valid', activation='relu', name='conv1')(x)
 
-                # t_vars = tf.trainable_variables()
-                self.global_step = tf.Variable(0, name='global_step', trainable=False)
-                self.optimizer = tf.train.AdamOptimizer()
-                self.train_op = self.optimizer.minimize(self.total_loss, global_step=self.global_step)  # var_list=t_vars)
-            else:
-                self.X = tf.placeholder(tf.float32, shape=(cfg.batch_size, 28, 28, 1))
-                self.labels = tf.placeholder(tf.int32, shape=(cfg.batch_size, ))
-                self.Y = tf.reshape(self.labels, shape=(cfg.batch_size, 10, 1))
-                self.build_arch()
+    # Layer 2: Conv2D layer with `squash` activation, then reshape to [None, num_capsule, dim_capsule]
+    primarycaps = PrimaryCap(conv1, dim_capsule=8, n_channels=32, kernel_size=9, strides=2, padding='valid')
 
-        tf.logging.info('Seting up the main structure')
+    # Layer 3: Capsule layer. Routing algorithm works here.
+    digitcaps = CapsuleLayer(num_capsule=n_class, dim_capsule=16, routings=routings,
+                             name='digitcaps')(primarycaps)
 
-    def build_arch(self):
-        with tf.variable_scope('Conv1_layer'):
-            # Conv1, [batch_size, 20, 20, 256]
-            conv1 = tf.contrib.layers.conv2d(self.X, num_outputs=256,
-                                             kernel_size=9, stride=1,
-                                             padding='VALID')
-            assert conv1.get_shape() == [cfg.batch_size, 20, 20, 256]
+    # Layer 4: This is an auxiliary layer to replace each capsule with its length. Just to match the true label's shape.
+    # If using tensorflow, this will not be necessary. :)
+    out_caps = Length(name='capsnet')(digitcaps)
 
-        # Primary Capsules layer, return [batch_size, 1152, 8, 1]
-        with tf.variable_scope('PrimaryCaps_layer'):
-            primaryCaps = CapsLayer(num_outputs=32, vec_len=8, with_routing=False, layer_type='CONV')
-            caps1 = primaryCaps(conv1, kernel_size=9, stride=2)
-            assert caps1.get_shape() == [cfg.batch_size, 1152, 8, 1]
+    # Decoder network.
+    y = keras.layers.Input(shape=(n_class,))
+    masked_by_y = Mask()([digitcaps, y])  # The true label is used to mask the output of capsule layer. For training
+    masked = Mask()(digitcaps)  # Mask using the capsule with maximal length. For prediction
 
-        # DigitCaps layer, return [batch_size, 10, 16, 1]
-        with tf.variable_scope('DigitCaps_layer'):
-            digitCaps = CapsLayer(num_outputs=10, vec_len=16, with_routing=True, layer_type='FC')
-            self.caps2 = digitCaps(caps1)
+    # Shared Decoder model in training and prediction
+    decoder = keras.models.Sequential(name='decoder')
+    decoder.add(keras.layers.Dense(512, activation='relu', input_dim=16*n_class))
+    decoder.add(keras.layers.Dense(1024, activation='relu'))
+    decoder.add(keras.layers.Dense(np.prod(input_shape), activation='sigmoid'))
+    decoder.add(keras.layers.Reshape(target_shape=input_shape, name='out_recon'))
 
-        # Decoder structure in Fig. 2
-        # 1. Do masking, how:
-        with tf.variable_scope('Masking'):
-            # a). calc ||v_c||, then do softmax(||v_c||)
-            # [batch_size, 10, 16, 1] => [batch_size, 10, 1, 1]
-            self.v_length = tf.sqrt(reduce_sum(tf.square(self.caps2),
-                                               axis=2, keepdims=True) + epsilon)
-            self.softmax_v = softmax(self.v_length, axis=1)
-            assert self.softmax_v.get_shape() == [cfg.batch_size, 10, 1, 1]
+    # Models for training and evaluation (prediction)
+    train_model = keras.models.Model([x, y], [out_caps, decoder(masked_by_y)])
+    eval_model = keras.models.Model(x, [out_caps, decoder(masked)])
 
-            # b). pick out the index of max softmax val of the 10 caps
-            # [batch_size, 10, 1, 1] => [batch_size] (index)
-            self.argmax_idx = tf.to_int32(tf.argmax(self.softmax_v, axis=1))
-            assert self.argmax_idx.get_shape() == [cfg.batch_size, 1, 1]
-            self.argmax_idx = tf.reshape(self.argmax_idx, shape=(cfg.batch_size, ))
+    # manipulate model
+    noise = keras.layers.Input(shape=(n_class, 16))
+    noised_digitcaps = keras.layers.Add()([digitcaps, noise])
+    masked_noised_y = Mask()([noised_digitcaps, y])
+    manipulate_model = keras.models.Model([x, y, noise], decoder(masked_noised_y))
+    return train_model, eval_model, manipulate_model
 
-            # Method 1.
-            if not cfg.mask_with_y:
-                # c). indexing
-                # It's not easy to understand the indexing process with argmax_idx
-                # as we are 3-dim animal
-                masked_v = []
-                for batch_size in range(cfg.batch_size):
-                    v = self.caps2[batch_size][self.argmax_idx[batch_size], :]
-                    masked_v.append(tf.reshape(v, shape=(1, 1, 16, 1)))
 
-                self.masked_v = tf.concat(masked_v, axis=0)
-                assert self.masked_v.get_shape() == [cfg.batch_size, 1, 16, 1]
-            # Method 2. masking with true label, default mode
-            else:
-                # self.masked_v = tf.matmul(tf.squeeze(self.caps2), tf.reshape(self.Y, (-1, 10, 1)), transpose_a=True)
-                self.masked_v = tf.multiply(tf.squeeze(self.caps2), tf.reshape(self.Y, (-1, 10, 1)))
-                self.v_length = tf.sqrt(reduce_sum(tf.square(self.caps2), axis=2, keepdims=True) + epsilon)
+def margin_loss(y_true, y_pred):
+    """
+    Margin loss for Eq.(4). When y_true[i, :] contains not just one `1`, this loss should work too. Not test it.
+    :param y_true: [None, n_classes]
+    :param y_pred: [None, num_capsule]
+    :return: a scalar loss value.
+    """
+    L = y_true * keras.backend.square(keras.backend.maximum(0., 0.9 - y_pred)) + \
+        0.5 * (1 - y_true) * keras.backend.square(keras.backend.maximum(0., y_pred - 0.1))
 
-        # 2. Reconstructe the MNIST images with 3 FC layers
-        # [batch_size, 1, 16, 1] => [batch_size, 16] => [batch_size, 512]
-        with tf.variable_scope('Decoder'):
-            vector_j = tf.reshape(self.masked_v, shape=(cfg.batch_size, -1))
-            fc1 = tf.contrib.layers.fully_connected(vector_j, num_outputs=512)
-            assert fc1.get_shape() == [cfg.batch_size, 512]
-            fc2 = tf.contrib.layers.fully_connected(fc1, num_outputs=1024)
-            assert fc2.get_shape() == [cfg.batch_size, 1024]
-            self.decoded = tf.contrib.layers.fully_connected(fc2, num_outputs=784, activation_fn=tf.sigmoid)
+    return keras.backend.mean(keras.backend.sum(L, 1))
 
-    def loss(self):
-        # 1. The margin loss
 
-        # [batch_size, 10, 1, 1]
-        # max_l = max(0, m_plus-||v_c||)^2
-        max_l = tf.square(tf.maximum(0., cfg.m_plus - self.v_length))
-        # max_r = max(0, ||v_c||-m_minus)^2
-        max_r = tf.square(tf.maximum(0., self.v_length - cfg.m_minus))
-        assert max_l.get_shape() == [cfg.batch_size, 10, 1, 1]
+def train(model, data, args):
+    """
+    Training a CapsuleNet
+    :param model: the CapsuleNet model
+    :param data: a tuple containing training and testing data, like `((x_train, y_train), (x_test, y_test))`
+    :param args: arguments
+    :return: The trained model
+    """
+    # unpacking the data
+    (x_train, y_train), (x_test, y_test) = data
 
-        # reshape: [batch_size, 10, 1, 1] => [batch_size, 10]
-        max_l = tf.reshape(max_l, shape=(cfg.batch_size, -1))
-        max_r = tf.reshape(max_r, shape=(cfg.batch_size, -1))
+    # callbacks
+    tb = keras.callbacks.TensorBoard(log_dir=args.save_dir + '/logs',
+                                        batch_size=args.batch_size, histogram_freq=int(args.debug))
+    checkpoint = keras.callbacks.ModelCheckpoint(args.save_dir + '/weights-{epoch:02d}.h5',
+                                                    monitor='val_capsnet_acc',
+                                                    save_best_only=True, save_weights_only=True, verbose=1)
+    lr_decay = keras.callbacks.LearningRateScheduler(schedule=lambda epoch: args.lr * (args.lr_decay ** epoch))
 
-        # calc T_c: [batch_size, 10]
-        # T_c = Y, is my understanding correct? Try it.
-        T_c = self.Y
-        # [batch_size, 10], element-wise multiply
-        L_c = T_c * max_l + cfg.lambda_val * (1 - T_c) * max_r
+    # compile the model
+    model.compile(optimizer=keras.optimizers.Adam(lr=args.lr),
+                  loss=[margin_loss, 'mse'],
+                  loss_weights=[1., args.lam_recon],
+                  metrics={'capsnet': 'accuracy'})
 
-        self.margin_loss = tf.reduce_mean(tf.reduce_sum(L_c, axis=1))
+    """
+    # Training without data augmentation:
+    model.fit([x_train, y_train], [y_train, x_train], batch_size=args.batch_size, epochs=args.epochs,
+              validation_data=[[x_test, y_test], [y_test, x_test]], callbacks=[log, tb, checkpoint, lr_decay])
+    """
 
-        # 2. The reconstruction loss
-        orgin = tf.reshape(self.X, shape=(cfg.batch_size, -1))
-        squared = tf.square(self.decoded - orgin)
-        self.reconstruction_err = tf.reduce_mean(squared)
+    # Begin: Training with data augmentation ---------------------------------------------------------------------#
+    def train_generator(x, y, batch_size, shift_fraction=0.):
+        train_datagen = ImageDataGenerator(
+            width_shift_range=shift_fraction, height_shift_range=shift_fraction)  # shift up to 2 pixel for MNIST
+        generator = train_datagen.flow(x, y, batch_size=batch_size)
+        while 1:
+            x_batch, y_batch = generator.next()
+            yield ([x_batch, y_batch], [y_batch, x_batch])
 
-        # 3. Total loss
-        # The paper uses sum of squared error as reconstruction error, but we
-        # have used reduce_mean in `# 2 The reconstruction loss` to calculate
-        # mean squared error. In order to keep in line with the paper,the
-        # regularization scale should be 0.0005*784=0.392
-        self.total_loss = self.margin_loss + cfg.regularization_scale * self.reconstruction_err
+    # Training with data augmentation. If shift_fraction=0., also no augmentation.
+    model.fit_generator(generator=train_generator(x_train, y_train, args.batch_size, args.shift_fraction),
+                        steps_per_epoch=int(y_train.shape[0] / args.batch_size),
+                        epochs=args.epochs,
+                        validation_data=[[x_test, y_test], [y_test, x_test]],
+                        callbacks=[tb, checkpoint, lr_decay])
+    # End: Training with data augmentation -----------------------------------------------------------------------#
 
-    # Summary
-    def _summary(self):
-        train_summary = []
-        train_summary.append(tf.summary.scalar('train/margin_loss', self.margin_loss))
-        train_summary.append(tf.summary.scalar('train/reconstruction_loss', self.reconstruction_err))
-        train_summary.append(tf.summary.scalar('train/total_loss', self.total_loss))
-        recon_img = tf.reshape(self.decoded, shape=(cfg.batch_size, 28, 28, 1))
-        train_summary.append(tf.summary.image('reconstruction_img', recon_img))
-        self.train_summary = tf.summary.merge(train_summary)
+    model.save_weights(args.save_dir + '/trained_model.h5')
+    print('Trained model saved to \'%s/trained_model.h5\'' % args.save_dir)
 
-        correct_prediction = tf.equal(tf.to_int32(self.labels), self.argmax_idx)
-        self.accuracy = tf.reduce_sum(tf.cast(correct_prediction, tf.float32))
+    return model
+
+
+def test(model, data):
+    x_test, y_test = data
+    y_pred, x_recon = model.predict(x_test, batch_size=100)
+    print('-'*30 + 'Begin: test' + '-'*30)
+    print('Test acc:', np.sum(np.argmax(y_pred, 1) == np.argmax(y_test, 1))/y_test.shape[0])
+
+
+def load_mnist():
+    # the data, shuffled and split between train and test sets
+    from keras.datasets import mnist
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+    x_train = x_train.reshape(-1, 28, 28, 1).astype('float32') / 255.
+    x_test = x_test.reshape(-1, 28, 28, 1).astype('float32') / 255.
+    y_train = keras.utils.to_categorical(y_train.astype('float32'))
+    y_test = keras.utils.to_categorical(y_test.astype('float32'))
+    return (x_train, y_train), (x_test, y_test)
+
+
+def combine_images(generated_images, height=None, width=None):
+    num = generated_images.shape[0]
+    if width is None and height is None:
+        width = int(math.sqrt(num))
+        height = int(math.ceil(float(num)/width))
+    elif width is not None and height is None:  # height not given
+        height = int(math.ceil(float(num)/width))
+    elif height is not None and width is None:  # width not given
+        width = int(math.ceil(float(num)/height))
+
+    shape = generated_images.shape[1:3]
+    image = np.zeros((height*shape[0], width*shape[1]),
+                     dtype=generated_images.dtype)
+    for index, img in enumerate(generated_images):
+        i = int(index/width)
+        j = index % width
+        image[i*shape[0]:(i+1)*shape[0], j*shape[1]:(j+1)*shape[1]] = \
+            img[:, :, 0]
+    return image

@@ -34,22 +34,15 @@ class LmCluster(object):
 
         print('Word tokens: {}'.format(self.num_tokens))
         print('Starting classes: {}'.format(len(self.classes)))
-        # s1 = sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1])
-        # print('Starting MI:', s1)
-        #
-        # scores = sorted([(*self.class_name([c1, c2]), self.L[c1][c2]) for c1, c2 in itertools.combinations(self.classes, 2)],
-        #                 key=lambda s: s[2], reverse=True)[:5]
-        #
-        # print('\n'.join([str(s) for s in scores]))
 
         merges = len(self.classes) - self.cluster_cutoff
         # for _ in tqdm(range(merges), unit='class'):
         for _ in range(merges):
             # Merge the classes that reduce the mutual information the least
-            c1, c2 = self.find_best_merge()
+            mi, (c1, c2) = self.find_best_merge()
             c_new = self.merge_classes(c1, c2)
 
-            save = *self.class_name([c1, c2]), c_new
+            save = *self.class_name([c1, c2]), c_new, mi
 
             # Add classes to the history of merges
             self.cluster_history.append(save)
@@ -138,7 +131,7 @@ class LmCluster(object):
         mi_loss += self.mutual_information([c2], [c1])
 
         # Subtract the weight of edges c1, c2 which will be removed
-        for d in self.bigram_counts:
+        for d in self.W:
             for c in [c1, c2]:
                 if d in self.W[c]:
                     mi_loss -= self.W[c][d]
@@ -160,7 +153,7 @@ class LmCluster(object):
         if math.isnan(best_loss) or math.isinf(best_loss):
             print('Bad MI loss', best_loss)
 
-        return best_merge
+        return best_loss, best_merge
 
     def merge_classes(self, c1, c2):
         c_new = self.cluster_counter
@@ -180,7 +173,6 @@ class LmCluster(object):
                 self.bigram_counts[c_new][d] += val
 
         # subtract the weights for the merged nodes from the score table
-        # TODO this is slow
         for c in [c1, c2]:
             for d1 in self.L:
                 for d2 in self.L[d1]:
@@ -224,9 +216,8 @@ class LmCluster(object):
 
     def update_tables(self, c_new):
         # Compute weights for edges connected to the new node
-        for d in self.bigram_counts:
-            self.W[d][c_new] = self.mutual_information([d], [c_new])
-            self.W[d][c_new] = self.mutual_information([c_new], [d])
+        for d in self.W:
+            self.W[d][c_new] = self.mutual_information([d], [c_new]) + self.mutual_information([c_new], [d])
         self.W[c_new][c_new] = self.mutual_information([c_new], [c_new])
 
         # Add the weights from this new node to the merge score table

@@ -6,17 +6,19 @@ from scipy.special import comb
 
 
 class LmCluster:
+    """Implements the Brown clustering algorithm"""
+
     def __init__(self, words, word_cutoff=10):
         self.word_cutoff = word_cutoff
 
-        # Unigrams
-        self.text_size = len(words)
-        self.word2int = {}
-        self.unigram_dist = defaultdict(int)
-
+        # Process the text's word frequency distribution
+        # Convert words to class numbers (integers)
         word_counts = Counter(words)
         word_set = sorted(word_counts, key=lambda w: word_counts[w], reverse=True)
 
+        self.text_size = len(words)
+        self.word2int = {}
+        self.unigram_dist = defaultdict(int)
         for i, w in enumerate(word_set):
             self.word2int[w] = i
             self.unigram_dist[i] = word_counts[w]
@@ -24,16 +26,55 @@ class LmCluster:
         self.int2word = sorted(self.word2int, key=lambda word: self.word2int[word])
         self.unigrams = [self.word2int[w] for w in words]
 
-        # Bigrams
+        # Process the bigram distribution from unigrams
         self.bigrams = list(zip(self.unigrams, self.unigrams[1:]))
         self.bigram_dist = defaultdict(lambda: defaultdict(int))
         for wprev, w in self.bigrams:
             self.bigram_dist[wprev][w] += 1
 
+        # Initialize each word in its own class, and only consider classes of words that appear frequently enough
         self.classes = [word for word in self.unigram_dist if self.unigram_dist[word] >= self.word_cutoff]
         self.class_counter = len(self.unigram_dist)
 
+        # Keep track of merges in the clustering algorithm
         self.merge_history = []
+        self.merge_tree = {}
+
+        # Initialize
+        self.S = self.build_sum_table()
+        self.L = self.build_loss_table()
+
+    def build_sum_table(self):
+        S = defaultdict(float)
+        for c in self.classes:
+            S[c] += np.sum(self.mutual_information([a], [c]) for a in self.bigram_dist)
+            S[c] += np.sum(self.mutual_information([c], [b]) for b in self.bigram_dist)
+            S[c] -= self.mutual_information([c], [c])
+        return S
+
+    def build_loss_table(self):
+        L = defaultdict(lambda: defaultdict(float))
+
+        total = comb(len(self.classes), 2, exact=True)
+        for l, r in tqdm(itertools.combinations(self.classes, 2), total=total, unit='pair'):
+            L[l][r] = self.mi_loss(l, r)
+
+        return L
+
+    def mi_loss(self, l, r):
+        mi = 0.0
+        mi -= self.S[l] + self.S[r]
+        mi += self.mutual_information([l], [r])
+        mi += self.mutual_information([r], [l])
+        mi += self.mutual_information([l, r], [l, r])
+
+        for c in self.bigram_dist:
+            if c in [l, r]:
+                continue
+            mi += self.mutual_information([l, r], [c])
+            mi += self.mutual_information([c], [l, r])
+
+        return mi
 
     def cluster(self, class_count=1):
         merges = len(self.classes) - class_count
@@ -47,33 +88,29 @@ class LmCluster:
             print(save)
 
     def best_merge(self):
-        s = defaultdict(float)
-        for c in self.classes:
-            s[c] += np.sum(self.mutual_information([a], [c]) for a in self.bigram_dist)
-            s[c] += np.sum(self.mutual_information([c], [b]) for b in self.bigram_dist)
-            s[c] -= self.mutual_information([c], [c])
+        mi = ((self.L[l][r], l, r) for l in self.L for r in self.L[l])
+        return max(mi, key=lambda x: x[0])
 
-        mi = (self.merge_mi(l, r, s) for l, r in itertools.combinations(self.classes, 2))
-        progress = tqdm(mi, total=comb(len(self.classes), 2, exact=True), leave=False)
-        return max(progress, key=lambda x: x[0])
+    def merge(self, l, r):
+        c_new = self.class_counter
 
-    def merge_mi(self, l, r, s):
-        mi = 0.0
-        mi -= s[l] + s[r]
-        mi += self.mutual_information([l], [r])
-        mi += self.mutual_information([r], [l])
-        mi += self.mutual_information([l, r], [l, r])
+        for a in self.L:
+            if a == l:
+                continue
+            for b in self.L[a]:
+                if b == r:
+                    continue
+                #                 self.L[a][b] += self.S[a] + self.S[b]
+                for c in [l, r]:
+                    self.L[a][b] -= self.mutual_information([a, b], [c])
+                    self.L[a][b] -= self.mutual_information([c], [a, b])
 
         for c in self.bigram_dist:
             if c in [l, r]:
                 continue
-            mi += self.mutual_information([l, r], [c])
-            mi += self.mutual_information([c], [l, r])
-
-        return mi, l, r
-
-    def merge(self, l, r):
-        c_new = self.class_counter
+            for d in [l, r]:
+                self.S[c] -= self.mutual_information([c], [d])
+                self.S[c] -= self.mutual_information([d], [c])
 
         # Add the new class to frequency distributions
         self.unigram_dist[c_new] = self.unigram_dist[l] + self.unigram_dist[r]
@@ -88,27 +125,47 @@ class LmCluster:
                 if d in self.bigram_dist[c] and c != c_new:
                     self.bigram_dist[c][c_new] += self.bigram_dist[c][d]
 
-        #         del self.bigram_dist[l]
-        #         del self.bigram_dist[r]
+        del self.bigram_dist[l]
+        del self.bigram_dist[r]
+        for c in self.bigram_dist:
+            for d in [l, r]:
+                if d in self.bigram_dist[c]:
+                    del self.bigram_dist[c][d]
+        for c in self.L:
+            for d in [l, r]:
+                if d in self.L[c]:
+                    del self.L[c][d]
+        if l in self.L:
+            del self.L[l]
+        if r in self.L:
+            del self.L[r]
+        #         del self.S[l]
+        #         del self.S[r]
+
         #         for c in self.bigram_dist:
-        #             for d in [l, r]:
-        #                 if d in self.bigram_dist[c]:
-        #                     del self.bigram_dist[c][d]
+        #             self.S[c] += self.mutual_information([l], [c])
+        #             self.S[c] += self.mutual_information([c], [l])
+
+        for a in self.L:
+            for b in self.L[a]:
+                #                 self.L[a][b] -= self.S[a] + self.S[b]
+                self.L[a][b] += self.mutual_information([a, b], [l])
+                self.L[a][b] += self.mutual_information([l], [a, b])
 
         # Update classes
         for c in [l, r]:
             self.classes.remove(c)
         self.classes.append(c_new)
 
+        self.merge_tree[l] = c_new
+        self.merge_tree[r] = c_new
+
         self.class_counter += 1
 
         return c_new
 
-    def mutual_information_total(self):
-        return np.sum(
-            self.mutual_information([wprev], [w]) for wprev in self.bigram_dist for w in self.bigram_dist[wprev])
-
     def mutual_information(self, left, right):
+
         bigram_count = np.sum(self.bigram_dist[l][r] for l in left for r in right)
 
         if not bigram_count:
@@ -117,7 +174,8 @@ class LmCluster:
         left_count = np.sum(self.unigram_dist[c] for c in left)
         right_count = np.sum(self.unigram_dist[c] for c in right)
 
-        return (bigram_count / self.text_size) * np.log2(bigram_count * self.text_size / left_count / right_count)
+        mi = (bigram_count / self.text_size) * np.log2(bigram_count * self.text_size / left_count / right_count)
+        return mi
 
     def class_name(self, classes):
         if not isinstance(classes, Iterable):
@@ -126,13 +184,26 @@ class LmCluster:
         classes = [self.int2word[c] if c < len(self.int2word) else c for c in classes]
         return classes if len(classes) > 1 else classes[0]
 
+    def get_classes(self):
+        classes = defaultdict(list)
 
-def preprocess(word):
-    return word.strip()
+        for w in self.unigram_dist:
+            if w not in self.merge_tree:
+                continue
+            c = w
+            while c in self.merge_tree:
+                c = self.merge_tree[c]
+
+            classes[c].append(w)
+
+        return classes
 
 
 def open_text(filename):
     """Reads a text line by line, applies light preprocessing, and returns an array of words"""
+    def preprocess(word):
+        return word.strip()
+
     with open(filename, encoding='iso-8859-2') as f:
         content = f.readlines()
 
@@ -143,5 +214,5 @@ if __name__ == '__main__':
     english = './TEXTEN1.txt'
     words_en = open_text(english)
 
-    lm = LanguageModel(words_en[:8000])
-    lm.cluster(15)
+    lm = LmCluster(words_en[:8000])
+    lm.cluster()

@@ -128,13 +128,10 @@ class LmCluster(object):
 
         # Add the weight of edges coming in to the potential new cluster from other nodes
         for d in classes:
+            if d in [c1, c2]:
+                continue
             mi_loss += self.mutual_information([c1, c2], [d])
             mi_loss += self.mutual_information([d], [c1, c2])
-
-        # Don't include what will be part of the new cluster
-        for d in [c1, c2]:
-            mi_loss -= self.mutual_information([c1, c2], [d])
-            mi_loss -= self.mutual_information([d], [c1, c2])
 
         # Add the weight of the edge from the potential new cluster to itself
         mi_loss += self.mutual_information([c1, c2], [c1, c2])

@@ -29,32 +29,32 @@ class LmCluster(object):
         self.classes = [word for word in self.word_counts if self.word_counts[word] >= self.word_cutoff]
 
         # Weight table W and merge loss table L (Liang's thesis)
-        self.W = self.build_w(self.classes)
+        self.W = self.build_w(self.bigram_counts)
         self.L = self.build_l(self.classes)
 
         print('Word tokens: {}'.format(self.num_tokens))
         print('Starting classes: {}'.format(len(self.classes)))
-        s1 = sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1])
-        print('Starting MI:', s1)
-
-        scores = sorted([(*self.class_name([c1, c2]), self.L[c1][c2]) for c1, c2 in itertools.combinations(self.classes, 2)],
-                        key=lambda s: s[2], reverse=True)[:20]
-
-        self.merge_classes(self.word2int['cannot'], self.word2int['may'])
-
-        s2 = sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1])
-        print('Next MI:', s1 - s2)
-
-        print('\n'.join([str(s) for s in scores]))
+        # s1 = sum(self.W[c1][c2] for c1 in self.W for c2 in self.W[c1])
+        # print('Starting MI:', s1)
+        #
+        # scores = sorted([(*self.class_name([c1, c2]), self.L[c1][c2]) for c1, c2 in itertools.combinations(self.classes, 2)],
+        #                 key=lambda s: s[2], reverse=True)[:5]
+        #
+        # print('\n'.join([str(s) for s in scores]))
 
         merges = len(self.classes) - self.cluster_cutoff
-        for _ in tqdm(range(merges), unit='class'):
+        # for _ in tqdm(range(merges), unit='class'):
+        for _ in range(merges):
             # Merge the classes that reduce the mutual information the least
             c1, c2 = self.find_best_merge()
             c_new = self.merge_classes(c1, c2)
 
+            save = *self.class_name([c1, c2]), c_new
+
             # Add classes to the history of merges
-            self.cluster_history.append((*self.class_name([c1, c2]), c_new))
+            self.cluster_history.append(save)
+
+            print(save)
 
             self.cluster_counter += 1
 
@@ -123,11 +123,10 @@ class LmCluster(object):
     def mi_loss(self, c1, c2):
         """Calculate the mutual information lost if the two classes are merged"""
 
-        classes = self.classes
         mi_loss = 0.0
 
         # Add the weight of edges coming in to the potential new cluster from other nodes
-        for d in classes:
+        for d in self.bigram_counts:
             if d in [c1, c2]:
                 continue
             mi_loss += self.mutual_information([c1, c2], [d])
@@ -135,9 +134,11 @@ class LmCluster(object):
 
         # Add the weight of the edge from the potential new cluster to itself
         mi_loss += self.mutual_information([c1, c2], [c1, c2])
+        mi_loss += self.mutual_information([c1], [c2])
+        mi_loss += self.mutual_information([c2], [c1])
 
         # Subtract the weight of edges c1, c2 which will be removed
-        for d in classes:
+        for d in self.bigram_counts:
             for c in [c1, c2]:
                 if d in self.W[c]:
                     mi_loss -= self.W[c][d]
@@ -175,8 +176,7 @@ class LmCluster(object):
         self.word_counts[c_new] = self.word_counts[c1] + self.word_counts[c2]
         for c in [c1, c2]:
             for d, val in self.bigram_counts[c].items():
-                if d == c1 or d == c2:
-                    d = c_new
+                d = c_new if d in [c1, c2] else d
                 self.bigram_counts[c_new][d] += val
 
         # subtract the weights for the merged nodes from the score table
@@ -224,7 +224,7 @@ class LmCluster(object):
 
     def update_tables(self, c_new):
         # Compute weights for edges connected to the new node
-        for d in self.classes:
+        for d in self.bigram_counts:
             self.W[d][c_new] = self.mutual_information([d], [c_new])
             self.W[d][c_new] = self.mutual_information([c_new], [d])
         self.W[c_new][c_new] = self.mutual_information([c_new], [c_new])
@@ -284,4 +284,4 @@ if __name__ == '__main__':
 
     lm_cluster = LmCluster(words_en[:8000])
 
-    print(history(lm_cluster)[:5])
+    # print(history(lm_cluster)[:5])

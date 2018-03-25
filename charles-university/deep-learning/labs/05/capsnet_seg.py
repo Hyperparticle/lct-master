@@ -10,7 +10,7 @@ class CapsNetSeg:
     def __init__(self, input_shape, classes, load_weights=False):
         self.model_filename = 'capsnet.h5'
         self.construct(input_shape, classes)
-        self.train_model.summary()
+        # self.train_model.summary()
 
         if load_weights:
             self.train_model.load_weights(self.model_filename)
@@ -31,25 +31,28 @@ class CapsNetSeg:
 
         y = keras.layers.Input((classes,))
         masked_train = Mask()([caps, y])
-        masked = Mask()(caps)
+        masked_eval = Mask()(caps)
 
-        decoder = keras.models.Sequential()
+        decoder = keras.models.Sequential(name='reconstruction')
         decoder.add(keras.layers.Dense(512, activation='relu', input_dim=16 * classes))
         decoder.add(keras.layers.Dense(1024, activation='relu'))
         decoder.add(keras.layers.Dense(np.prod(input_shape), activation='sigmoid'))
-        decoder.add(keras.layers.Reshape(target_shape=input_shape, name='reconstruction'))
+        decoder.add(keras.layers.Reshape(target_shape=input_shape))
 
-        train_model = keras.models.Model([x, y], [output_caps, decoder(masked_train)])
-        eval_model = keras.models.Model(x, [output_caps, decoder(masked)])
+        masked_train_decode = decoder(masked_train)
+        masked_eval_decode = decoder(masked_eval)
+
+        train_model = keras.models.Model([x, y], [output_caps, masked_train_decode])
+        eval_model = keras.models.Model(x, [output_caps, masked_eval_decode])
 
         self.train_model, self.eval_model = train_model, eval_model
 
     def train(self, data, args):
         model = self.train_model
 
-        (x_train, y_train), (x_test, y_test) = data
+        (x_train, y_train, m_train), (x_test, y_test, m_test) = data
 
-        tb = keras.callbacks.TensorBoard(log_dir='./logs',
+        tb = keras.callbacks.TensorBoard(log_dir=args.logdir,
                                          batch_size=args.batch_size,
                                          histogram_freq=1)
         checkpoint = keras.callbacks.ModelCheckpoint(self.model_filename, monitor='val_capsnet_acc',
@@ -66,10 +69,10 @@ class CapsNetSeg:
                       loss_weights=[1., 0.392],
                       metrics={'capsnet': 'accuracy'})
 
-        model.fit_generator(generator=train_generator(x_train, y_train, args.batch_size, 0.1),
+        model.fit_generator(generator=train_generator(x_train, y_train, m_train, args.batch_size, 0.1),
                             steps_per_epoch=int(y_train.shape[0] / args.batch_size),
                             epochs=args.epochs,
-                            validation_data=[[x_test, y_test], [y_test, x_test]],
+                            validation_data=[[x_test, y_test], [y_test, m_test]],
                             callbacks=[tb, checkpoint, learn_rate_decay])
 
         model.save_weights(self.model_filename)
@@ -77,17 +80,30 @@ class CapsNetSeg:
         return model
 
     def evaluate(self, data):
-        x_test, y_test = data
-        y_pred = self.predict(x_test)
+        x_test, y_test, m_test = data
+        y_pred, m_pred = self.predict(x_test)
 
-        accuracy = np.sum(y_pred == np.argmax(y_test, 1)) / y_test.shape[0]
-        return accuracy
+        total = y_test.shape[0]
+        y_test = np.argmax(y_test, 1)
+
+        accuracy = np.sum(y_pred == y_test) / total
+
+        only_correct_masks = np.array([m if t == p else np.zeros_like(m) for m, t, p in zip(m_pred, y_test, y_pred)])
+        # only_correct_masks = np.where(y_test == y_pred, m_pred, np.zeros_like(m_pred))
+
+        intersection = np.sum(only_correct_masks * m_test, axis=(1, 2, 3))
+        iou = np.mean(
+            intersection / (np.sum(only_correct_masks, axis=(1, 2, 3)) +
+                            np.sum(m_test, axis=(1, 2, 3)) - intersection)
+        )
+
+        return accuracy, iou
 
     def predict(self, x_test):
         model = self.eval_model
 
-        y_pred, _ = model.predict(x_test)
-        return np.argmax(y_pred, 1)
+        y_pred, m_pred = model.predict(x_test)
+        return np.argmax(y_pred, 1), np.round(m_pred)
 
 
 class CapsuleLayer(keras.layers.Layer):
@@ -157,10 +173,14 @@ def squash(vectors, axis=-1):
     return scale * vectors
 
 
-def train_generator(x, y, batch_size, shift_fraction=0.):
+def train_generator(x, y, m, batch_size, shift_fraction=0., seed=42):
     train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
         width_shift_range=shift_fraction, height_shift_range=shift_fraction)
-    generator = train_datagen.flow(x, y, batch_size=batch_size)
+    gen1 = train_datagen.flow(x, y, batch_size=batch_size, seed=seed)
+    gen2 = train_datagen.flow(m, batch_size=batch_size, seed=seed)
+
     while True:
-        x_batch, y_batch = generator.next()
-        yield ([x_batch, y_batch], [y_batch, x_batch])
+        x_batch, y_batch = gen1.next()
+        m_batch = gen2.next()
+
+        yield ([x_batch, y_batch], [y_batch, m_batch])

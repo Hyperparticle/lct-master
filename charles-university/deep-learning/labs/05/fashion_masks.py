@@ -158,35 +158,37 @@ if __name__ == "__main__":
     parser.add_argument('--load', action='store_true')
     args = parser.parse_args()
 
-    # # Create logdir name
-    # args.logdir = "logs/{}-{}-{}".format(
-    #     os.path.basename(__file__),
-    #     datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
-    #     ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value)
-    #               for key, value in sorted(vars(args).items()))).replace("/", "-")
-    # )
-    # if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
+    # Create logdir name
+    args.logdir = "logs/{}-{}-{}".format(
+        os.path.basename(__file__),
+        datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value)
+                  for key, value in sorted(vars(args).items()))).replace("/", "-")
+    )
+    if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
     train = Dataset("fashion-masks-train.npz")
     dev = Dataset("fashion-masks-dev.npz")
     test = Dataset("fashion-masks-test.npz")
 
-    # x_train, y_train = train.images, (train.masks, tf.keras.utils.to_categorical(train.labels))
-    # x_val, y_val = dev.images, (dev.masks, tf.keras.utils.to_categorical(dev.labels))
-    x_train, y_train = train.images, tf.keras.utils.to_categorical(train.labels)
-    x_val, y_val = dev.images, tf.keras.utils.to_categorical(dev.labels)
+    x_train, y_train, m_train = train.images, tf.keras.utils.to_categorical(train.labels), train.masks
+    x_val, y_val, m_val = dev.images, tf.keras.utils.to_categorical(dev.labels), dev.masks
     x_test = test.images
 
     model = CapsNetSeg(x_train.shape[1:], 10, args.load)
 
     if not args.load:
-        model.train(data=((x_train, y_train), (x_val, y_val)), args=args)
+        model.train(data=((x_train, y_train, m_train), (x_val, y_val, m_val)), args=args)
 
-    accuracy = model.evaluate(data=(x_val, y_val))
-    predictions = model.predict(x_test)
+    accuracy, iou = model.evaluate(data=(x_val, y_val, m_val))
 
-    print(accuracy, '\n')
+    print(accuracy, iou, '\n')
+
+    labels, masks = model.predict(x_test)
+    with open("fashion_masks_test.txt", "w") as test_file:
+        for i in range(len(labels)):
+            print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)
 
     # # Construct the network
     # network = Network(threads=args.threads)

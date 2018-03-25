@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
+from capsnet_seg import CapsNetSeg
 
 
 class Dataset:
@@ -64,8 +65,6 @@ class Network:
             # - label predictions are stored in `self.labels_predictions` of shape [None] and type tf.int64
             # - mask predictions are stored in `self.masks_predictions` of shape [None, 28, 28, 1] and type tf.float32
             #   with values 0 or 1
-
-            # CB-10-3-2-same,M-3-2,F,R-100
 
             x = self.images
 
@@ -154,38 +153,54 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
 
-    # parser.add_argument('--learn_rate', default=0.001, type=float)
-    # parser.add_argument('--learn_rate_decay', default=0.9, type=float)
-    # parser.add_argument('--load', action='store_true')
+    parser.add_argument('--learn_rate', default=0.001, type=float)
+    parser.add_argument('--learn_rate_decay', default=0.9, type=float)
+    parser.add_argument('--load', action='store_true')
     args = parser.parse_args()
 
-    # Create logdir name
-    args.logdir = "logs/{}-{}-{}".format(
-        os.path.basename(__file__),
-        datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
-        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value)
-                  for key, value in sorted(vars(args).items()))).replace("/", "-")
-    )
-    if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
+    # # Create logdir name
+    # args.logdir = "logs/{}-{}-{}".format(
+    #     os.path.basename(__file__),
+    #     datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+    #     ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value)
+    #               for key, value in sorted(vars(args).items()))).replace("/", "-")
+    # )
+    # if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
     train = Dataset("fashion-masks-train.npz")
     dev = Dataset("fashion-masks-dev.npz")
     test = Dataset("fashion-masks-test.npz")
 
-    # Construct the network
-    network = Network(threads=args.threads)
-    network.construct(args)
+    # x_train, y_train = train.images, (train.masks, tf.keras.utils.to_categorical(train.labels))
+    # x_val, y_val = dev.images, (dev.masks, tf.keras.utils.to_categorical(dev.labels))
+    x_train, y_train = train.images, tf.keras.utils.to_categorical(train.labels)
+    x_val, y_val = dev.images, tf.keras.utils.to_categorical(dev.labels)
+    x_test = test.images
 
-    # Train
-    for i in range(args.epochs):
-        while not train.epoch_finished():
-            images, labels, masks = train.next_batch(args.batch_size)
-            network.train(images, labels, masks)
+    model = CapsNetSeg(x_train.shape[1:], 10, args.load)
 
-        network.evaluate("dev", dev.images, dev.labels, dev.masks)
+    if not args.load:
+        model.train(data=((x_train, y_train), (x_val, y_val)), args=args)
 
-    labels, masks = network.predict(test.images)
-    with open("fashion_masks_test.txt", "w") as test_file:
-        for i in range(len(labels)):
-            print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)
+    accuracy = model.evaluate(data=(x_val, y_val))
+    predictions = model.predict(x_test)
+
+    print(accuracy, '\n')
+
+    # # Construct the network
+    # network = Network(threads=args.threads)
+    # network.construct(args)
+    #
+    # # Train
+    # for i in range(args.epochs):
+    #     while not train.epoch_finished():
+    #         images, labels, masks = train.next_batch(args.batch_size)
+    #         network.train(images, labels, masks)
+    #
+    #     network.evaluate("dev", dev.images, dev.labels, dev.masks)
+    #
+    # labels, masks = network.predict(test.images)
+    # with open("fashion_masks_test.txt", "w") as test_file:
+    #     for i in range(len(labels)):
+    #         print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)

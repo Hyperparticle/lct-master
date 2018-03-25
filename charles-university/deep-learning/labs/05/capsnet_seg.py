@@ -3,8 +3,9 @@ import keras
 import tensorflow as tf
 
 
-class CapsNet:
-    """Implementation of CapsNet from https://arxiv.org/pdf/1710.09829.pdf"""
+class CapsNetSeg:
+    """Implementation of CapsNet from https://arxiv.org/pdf/1710.09829.pdf
+    with an additional segmenting task"""
 
     def __init__(self, input_shape, classes, load_weights=False):
         self.model_filename = 'capsnet.h5'

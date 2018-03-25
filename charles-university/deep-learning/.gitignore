@@ -2,3 +2,5 @@
 *.gz
 /labs/04/capsnet.h5
 /labs/05/*.npz*
+
+fashion_masks_test.txt

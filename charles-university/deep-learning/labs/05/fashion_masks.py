@@ -56,7 +56,7 @@ class Network:
             self.masks = tf.placeholder(tf.float32, [None, self.HEIGHT, self.WIDTH, 1], name="masks")
             self.is_training = tf.placeholder(tf.bool, [], name="is_training")
 
-            # TODO: Computation and training.
+            # Computation and training.
             #
             # The code below assumes that:
             # - loss is stored in `loss`
@@ -64,6 +64,37 @@ class Network:
             # - label predictions are stored in `self.labels_predictions` of shape [None] and type tf.int64
             # - mask predictions are stored in `self.masks_predictions` of shape [None, 28, 28, 1] and type tf.float32
             #   with values 0 or 1
+
+            # CB-10-3-2-same,M-3-2,F,R-100
+
+            x = self.images
+
+            x = tf.layers.conv2d(x, filters=10, kernel_size=3, strides=2, padding='same',
+                                 activation=None, use_bias=False)
+            x = tf.layers.batch_normalization(x, training=self.is_training)
+            x = tf.nn.relu(x)
+
+            x = tf.layers.max_pooling2d(x, pool_size=3, strides=2)
+
+            x = tf.contrib.layers.flatten(x)
+
+            x_label = tf.layers.dense(x, 100)
+            output_label = tf.layers.dense(x_label, self.LABELS, activation=None, name='output_label')
+            self.labels_predictions = tf.argmax(output_label, axis=1)
+
+            x_mask = tf.layers.dense(x, self.WIDTH * self.HEIGHT * 10)
+            output_mask = tf.layers.dense(x_mask, self.HEIGHT * self.WIDTH, activation=None, name='output_mask')
+            output_mask = tf.reshape(output_mask, [-1, self.HEIGHT, self.WIDTH, 1])
+            self.masks_predictions = tf.round(output_mask)
+
+            loss_label = tf.losses.sparse_softmax_cross_entropy(self.labels, output_label, scope='loss')
+            loss_mask = tf.losses.mean_squared_error(self.masks, output_mask)
+
+            loss = loss_label + loss_mask
+            global_step = tf.train.create_global_step()
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name='training')
 
             # Summaries
             accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.labels_predictions), tf.float32))
@@ -119,9 +150,13 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=None, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=None, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=100, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+
+    # parser.add_argument('--learn_rate', default=0.001, type=float)
+    # parser.add_argument('--learn_rate_decay', default=0.9, type=float)
+    # parser.add_argument('--load', action='store_true')
     args = parser.parse_args()
 
     # Create logdir name

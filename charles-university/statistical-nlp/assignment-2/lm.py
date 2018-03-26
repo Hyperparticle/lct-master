@@ -41,16 +41,16 @@ class LmCluster:
         self.merge_tree = {}
 
         # Initialize
-        self.S = self.build_sum_table()
+        self.W = self.build_sum_table()
         self.L = self.build_loss_table()
 
     def build_sum_table(self):
-        S = defaultdict(float)
-        for c in self.classes:
-            S[c] += np.sum(self.mutual_information([a], [c]) for a in self.bigram_dist)
-            S[c] += np.sum(self.mutual_information([c], [b]) for b in self.bigram_dist)
-            S[c] -= self.mutual_information([c], [c])
-        return S
+        W = defaultdict(lambda: defaultdict(float))
+        for l, r in itertools.combinations(self.bigram_dist, 2):
+            W[l][r] = self.mutual_information([l], [r]) + self.mutual_information([r], [l])
+        for c in self.bigram_dist:
+            W[c][c] = self.mutual_information([c], [c])
+        return W
 
     def build_loss_table(self):
         L = defaultdict(lambda: defaultdict(float))
@@ -63,7 +63,6 @@ class LmCluster:
 
     def mi_loss(self, l, r):
         mi = 0.0
-        mi -= self.S[l] + self.S[r]
         mi += self.mutual_information([l], [r])
         mi += self.mutual_information([r], [l])
         mi += self.mutual_information([l, r], [l, r])
@@ -73,6 +72,13 @@ class LmCluster:
                 continue
             mi += self.mutual_information([l, r], [c])
             mi += self.mutual_information([c], [l, r])
+
+        for c in self.bigram_dist:
+            for d in [l, r]:
+                if c in self.W[d]:
+                    mi -= self.W[d][c]
+                if d in self.W[c]:
+                    mi -= self.W[c][d]
 
         return mi
 
@@ -94,24 +100,6 @@ class LmCluster:
     def merge(self, l, r):
         c_new = self.class_counter
 
-        for a in self.L:
-            if a == l:
-                continue
-            for b in self.L[a]:
-                if b == r:
-                    continue
-                #                 self.L[a][b] += self.S[a] + self.S[b]
-                for c in [l, r]:
-                    self.L[a][b] -= self.mutual_information([a, b], [c])
-                    self.L[a][b] -= self.mutual_information([c], [a, b])
-
-        for c in self.bigram_dist:
-            if c in [l, r]:
-                continue
-            for d in [l, r]:
-                self.S[c] -= self.mutual_information([c], [d])
-                self.S[c] -= self.mutual_information([d], [c])
-
         # Add the new class to frequency distributions
         self.unigram_dist[c_new] = self.unigram_dist[l] + self.unigram_dist[r]
 
@@ -125,36 +113,42 @@ class LmCluster:
                 if d in self.bigram_dist[c] and c != c_new:
                     self.bigram_dist[c][c_new] += self.bigram_dist[c][d]
 
+        for a in self.L:
+            for b in self.L[a]:
+                for c in [l, r]:
+                    self.L[a][b] -= self.mutual_information([a, b], [c])
+                    self.L[a][b] -= self.mutual_information([c], [a, b])
+
         del self.bigram_dist[l]
         del self.bigram_dist[r]
         for c in self.bigram_dist:
             for d in [l, r]:
                 if d in self.bigram_dist[c]:
                     del self.bigram_dist[c][d]
-        for c in self.L:
-            for d in [l, r]:
-                if d in self.L[c]:
-                    del self.L[c][d]
-        if l in self.L:
-            del self.L[l]
-        if r in self.L:
-            del self.L[r]
-        #         del self.S[l]
-        #         del self.S[r]
 
-        #         for c in self.bigram_dist:
-        #             self.S[c] += self.mutual_information([l], [c])
-        #             self.S[c] += self.mutual_information([c], [l])
+        for table in [self.W, self.L]:
+            for c in table:
+                for d in [l, r]:
+                    if d in table[c]:
+                        del table[c][d]
+            if l in table:
+                del table[l]
+            if r in table:
+                del table[r]
 
-        for a in self.L:
-            for b in self.L[a]:
-                #                 self.L[a][b] -= self.S[a] + self.S[b]
-                self.L[a][b] += self.mutual_information([a, b], [l])
-                self.L[a][b] += self.mutual_information([l], [a, b])
-
-        # Update classes
         for c in [l, r]:
             self.classes.remove(c)
+
+        for c in self.bigram_dist:
+            if c == c_new:
+                continue
+            self.W[c][c_new] = self.mutual_information([c], [c_new]) + self.mutual_information([c_new], [c])
+        self.W[c_new][c_new] = self.mutual_information([c_new], [c_new])
+
+        for c in self.classes:
+            self.L[c][c_new] = self.mi_loss(c, c_new)
+
+        # Update classes
         self.classes.append(c_new)
 
         self.merge_tree[l] = c_new

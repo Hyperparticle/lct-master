@@ -4,31 +4,43 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.feature_extraction import DictVectorizer
 
+
 def evaluate(model, train, test):
-    model.fit(train[:,:-1], train[:,-1])
-    target_pred = model.predict(test[:,:-1])
-    actual = test[:,-1]
-    return np.sum(np.square(target_pred - actual))
+    x_train, y_train, x_test, y_test = train[:, :-1], train[:, -1], test[:, :-1], test[:, -1]
 
-models = [
-    [LinearRegression(), 'linear regression'],
-]
+    model.fit(x_train, y_train)
+    target_pred = model.predict(x_test)
 
-# train = np.loadtxt('artificial_2x_train.tsv', delimiter='\t')
-# test = np.loadtxt('artificial_2x_test.tsv', delimiter='\t')
-# train = np.loadtxt('pragueestateprices_train.tsv', delimiter='\t')
-# test = np.loadtxt('pragueestateprices_test.tsv', delimiter='\t')
+    mse = ((target_pred - y_test) ** 2).mean()
+    return mse
 
 
-# for model, name in models:
-#     print(name, evaluate(model, train, test))
+def vectorize(train, test):
+    v = DictVectorizer(sparse=False)
+    d = train.append(test).to_dict('records')
+    x = v.fit_transform(d)
+    return x[:len(train)], x[len(train):]
 
-v = DictVectorizer(sparse=False)
-train = pd.read_csv('pragueestateprices_train.tsv', delimiter='\t')
+
+model = LinearRegression()
+
+train = np.loadtxt('artificial_2x_train.tsv', delimiter='\t')
+test = np.loadtxt('artificial_2x_test.tsv', delimiter='\t')
+
+result = evaluate(model, train, test)
+print('artificial_2x')
+print('MSE: {:.3f}'.format(result))
 print()
 
 
+cols = [i for i in range(9)]
+train = pd.read_csv('pragueestateprices_train.tsv', delimiter='\t', usecols=cols, header=None)
+test = pd.read_csv('pragueestateprices_test.tsv', delimiter='\t', usecols=cols, header=None)
+train.columns = test.columns = [str(i) for i in range(9)]
 
-D = [{'foo': 1, 'bar': 2}, {'foo': 3, 'baz': 1}]
-X = v.fit_transform(D)
-print(X)
+train, test = vectorize(train, test)
+
+result = evaluate(model, train, test)
+print('pragueestateprices')
+print('MSE: {:.3f}'.format(result))
+print()

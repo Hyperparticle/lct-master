@@ -1,8 +1,34 @@
 #!/usr/bin/env python3
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
 from sklearn.feature_extraction import DictVectorizer
+
+
+class LinearRegression:
+    def __init__(self, alpha=1e-5, iterations=5000):
+        self.alpha = alpha
+        self.iterations = iterations
+
+        self.coef, self.intercept = None, None
+
+    def fit(self, X, y):
+        assert len(X) == len(y)
+
+        y = np.expand_dims(y, axis=1)
+        n, m = X.shape
+        self.W = np.random.normal(size=[m, 1])
+
+        for i in range(self.iterations):
+            pred = self._func(X)
+            error = pred - y
+            W_grad = X.T.dot(error) / n
+            self.W -= self.alpha * W_grad
+
+    def predict(self, X):
+        return self._func(X)
+
+    def _func(self, X):
+        return X.dot(self.W)
 
 
 def evaluate(model, train, test):
@@ -21,6 +47,8 @@ def vectorize(train, test):
     x = v.fit_transform(d)
     return x[:len(train)], x[len(train):]
 
+
+np.random.seed(100)
 
 model = LinearRegression()
 

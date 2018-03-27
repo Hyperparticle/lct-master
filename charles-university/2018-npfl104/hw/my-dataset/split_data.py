@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 if __name__ == "__main__":
-  data = pd.read_csv('creditcard.csv')[['V' + str(i+1) for i in range(28)] + ['Class']]
+  data = pd.read_csv('creditcard.csv')[['V' + str(i+1) for i in range(28)] + ['Amount', 'Class']]
 
   true = data[data.Class == 1]
   false = data[data.Class == 0][:5000 - len(true)]

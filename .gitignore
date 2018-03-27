@@ -1,6 +1,7 @@
-**/hw03/*.csv
-**/hw03/*.txt
-**/hw04/data/*
+**/my-dataset/*.csv
+**/my-dataset/*.txt
+**/my-classifiers/data/*
+**/scikit-class/data/*
 **/uppercase/model*
 **/uppercase/checkpoint
 

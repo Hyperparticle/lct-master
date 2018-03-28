@@ -1,0 +1,7 @@
+# Credit Card Fraud Detection
+
+The dataset contains transactions made by credit cards in September 2013 by european cardholders. This dataset presents transactions that occurred in two days, where we have 492 frauds out of 5000 transactions. It contains only numerical input variables which are the result of a PCA transformation.
+
+The only preprocessing performed was to reduce the number of negative examples to reduce the file size. Train and test examples have 4000 and 1000 points respectively.
+
+Obtained from https://www.kaggle.com/mlg-ulb/creditcardfraud

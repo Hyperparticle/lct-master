@@ -6,15 +6,11 @@ from scipy.optimize import curve_fit
 
 data = pd.read_csv('creditcard.csv')
 
-x,y = data['V1'], data['V2']
+x,y = data['Amount'], data['Class']
 
 plt.scatter(x, y)
-plt.xlabel('V1')
-plt.ylabel('V2')
-plt.title('V2 as a function of V1')
-
-# slope,intercept = curve_fit(lambda x,a,b: a*x + b, x, y)[0]
-# print(slope, intercept)
-# plt.plot([70, 90], [90, 200], 'k-')
+plt.xlabel('Amount')
+plt.ylabel('Class')
+# plt.title('V2 as a function of V1')
 
 plt.savefig('data.png')

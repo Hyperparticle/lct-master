@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
-from capsnet_seg import CapsNetSeg
+from tqdm import tqdm
+
+from resnet import residual_layer, preprocess
 
 
 class Dataset:
@@ -42,12 +44,10 @@ class Network:
     HEIGHT = 28
     LABELS = 10
 
-    def __init__(self, threads, seed=42):
+    def __init__(self):
         # Create an empty graph and a session
         graph = tf.Graph()
-        graph.seed = seed
-        self.session = tf.Session(graph = graph, config=tf.ConfigProto(inter_op_parallelism_threads=threads,
-                                                                       intra_op_parallelism_threads=threads))
+        self.session = tf.Session(graph=graph)
 
     def construct(self, args):
         with self.session.graph.as_default():
@@ -66,30 +66,46 @@ class Network:
             # - mask predictions are stored in `self.masks_predictions` of shape [None, 28, 28, 1] and type tf.float32
             #   with values 0 or 1
 
-            x = self.images
+            x = preprocess(self.images)
 
-            x = tf.layers.conv2d(x, filters=10, kernel_size=3, strides=2, padding='same',
-                                 activation=None, use_bias=False)
+            x = tf.layers.conv2d(x, 16, [3,3], strides=1, padding='SAME', use_bias=False, kernel_initializer=tf.contrib.layers.variance_scaling_initializer())
             x = tf.layers.batch_normalization(x, training=self.is_training)
             x = tf.nn.relu(x)
 
-            x = tf.layers.max_pooling2d(x, pool_size=3, strides=2)
+            # [28, 28, 16]
+            for i in range(args.residual_depth):
+                x = residual_layer(x, 16, self.is_training)
+                assert x.shape[1:] == [28, 28, 16]
 
-            x = tf.contrib.layers.flatten(x)
+            # [14, 14, 32]
+            for i in range(args.residual_depth):
+                x = residual_layer(x, 32, self.is_training, downsample=(i==0))
+                assert x.shape[1:] == [14, 14, 32]
 
-            x_label = tf.layers.dense(x, 100)
-            output_label = tf.layers.dense(x_label, self.LABELS, activation=None, name='output_label')
+            # [7, 7, 64]
+            for i in range(args.residual_depth):
+                x = residual_layer(x, 64, self.is_training, downsample=(i==0))
+                assert x.shape[1:] == [7, 7, 64]
+
+            # Global average pooling
+            x = tf.reduce_mean(x, [1,2])
+            assert x.shape[1:] == [64]
+            # [64]
+
+            output_label = tf.layers.dense(x, self.LABELS, activation=None, name='output_label')
             self.labels_predictions = tf.argmax(output_label, axis=1)
 
-            x_mask = tf.layers.dense(x, self.WIDTH * self.HEIGHT * 10)
-            output_mask = tf.layers.dense(x_mask, self.HEIGHT * self.WIDTH, activation=None, name='output_mask')
-            output_mask = tf.reshape(output_mask, [-1, self.HEIGHT, self.WIDTH, 1])
+            # x_mask = tf.layers.dense(x, self.WIDTH * self.HEIGHT * 10)
+            # output_mask = tf.layers.dense(x_mask, self.HEIGHT * self.WIDTH, activation=None, name='output_mask')
+            # output_mask = tf.reshape(output_mask, [-1, self.HEIGHT, self.WIDTH, 1])
+            output_mask = tf.zeros_like(self.images)
             self.masks_predictions = tf.round(output_mask)
 
             loss_label = tf.losses.sparse_softmax_cross_entropy(self.labels, output_label, scope='loss')
             loss_mask = tf.losses.mean_squared_error(self.masks, output_mask)
 
-            loss = loss_label + loss_mask
+            # loss = loss_label + loss_mask
+            loss = loss_label
             global_step = tf.train.create_global_step()
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
@@ -144,18 +160,11 @@ if __name__ == "__main__":
     import os
     import re
 
-    # Fix random seed
-    np.random.seed(42)
-
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=100, type=int, help="Batch size.")
+    parser.add_argument("--batch_size", default=128, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
-    parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
-
-    parser.add_argument('--learn_rate', default=0.001, type=float)
-    parser.add_argument('--learn_rate_decay', default=0.9, type=float)
-    parser.add_argument('--load', action='store_true')
+    parser.add_argument("--residual_depth", default=3, type=int, help="Depth of residual layers.")
     args = parser.parse_args()
 
     # Create logdir name
@@ -172,37 +181,23 @@ if __name__ == "__main__":
     dev = Dataset("fashion-masks-dev.npz")
     test = Dataset("fashion-masks-test.npz")
 
-    x_train, y_train, m_train = train.images, tf.keras.utils.to_categorical(train.labels), train.masks
-    x_val, y_val, m_val = dev.images, tf.keras.utils.to_categorical(dev.labels), dev.masks
-    x_test = test.images
+    # Construct the network
+    network = Network()
+    network.construct(args)
+    
+    # Train
+    for i in range(args.epochs):
+        print('Epoch', i)
 
-    model = CapsNetSeg(x_train.shape[1:], 10, args.load)
-
-    if not args.load:
-        model.train(data=((x_train, y_train, m_train), (x_val, y_val, m_val)), args=args)
-
-    accuracy, iou = model.evaluate(data=(x_val, y_val, m_val))
-
-    print(accuracy, iou, '\n')
-
-    labels, masks = model.predict(x_test)
+        with tqdm(total=len(train._images)) as pbar:
+            while not train.epoch_finished():
+                images, labels, masks = train.next_batch(args.batch_size)
+                network.train(images, labels, masks)
+                pbar.update(len(images))
+    
+        network.evaluate("dev", dev.images, dev.labels, dev.masks)
+    
+    labels, masks = network.predict(test.images)
     with open("fashion_masks_test.txt", "w") as test_file:
         for i in range(len(labels)):
             print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)
-
-    # # Construct the network
-    # network = Network(threads=args.threads)
-    # network.construct(args)
-    #
-    # # Train
-    # for i in range(args.epochs):
-    #     while not train.epoch_finished():
-    #         images, labels, masks = train.next_batch(args.batch_size)
-    #         network.train(images, labels, masks)
-    #
-    #     network.evaluate("dev", dev.images, dev.labels, dev.masks)
-    #
-    # labels, masks = network.predict(test.images)
-    # with open("fashion_masks_test.txt", "w") as test_file:
-    #     for i in range(len(labels)):
-    #         print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)

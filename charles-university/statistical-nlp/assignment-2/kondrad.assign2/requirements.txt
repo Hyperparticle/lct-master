@@ -1,0 +1,7 @@
+nltk
+matplotlib
+pandas
+numpy
+jupyter
+tqdm
+scipy

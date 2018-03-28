@@ -4,7 +4,7 @@
 
 Author: Dan Kondratyuk
 
-March 2, 2018
+March 28, 2018
 
 ## Viewing the Assignment
 
@@ -23,7 +23,7 @@ $ pip install -r requirements.txt
 Then open the notebook with:
 
 ```
-$ jupyter notebook ./nlp-assignment-2.ipynb
+$ jupyter notebook ./nlp-assignment-3.ipynb
 ```
 
 This should open a new tab in your default browser. From there the code can be run and inspected.

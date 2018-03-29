@@ -6,24 +6,15 @@ from tqdm import tqdm
 from resnet import resnet
 
 
-def iou_accuracy(pred_labels, pred_masks, gold_labels, gold_masks):
-    iou = 0
-    for pred_label, pred_mask, gold_label, gold_mask in zip(pred_labels, pred_masks, gold_labels, gold_masks):
-        if pred_label == gold_label:
-            system_mask = np.array(pred_mask, dtype=gold_mask.dtype).reshape(gold_mask.shape)
-            system_pixels = np.sum(system_mask)
-            gold_pixels = np.sum(gold_mask)
-            intersection_pixels = np.sum(system_mask * gold_mask)
-            iou += intersection_pixels / (system_pixels + gold_pixels - intersection_pixels)
-    return 100 * iou / len(gold_labels)
-
-
 class Dataset:
     def __init__(self, filename):
         data = np.load(filename)
         self._images = data["images"]
         self._labels = data["labels"] if "labels" in data else None
         self._masks = data["masks"] if "masks" in data else None
+
+        # Normalize images
+        self._images = (self._images - self._images.mean(axis=0)) / (self._images.std(axis=0))
 
     @property
     def images(self):
@@ -165,6 +156,25 @@ class Network:
         self.saver.restore(self.session, path)
 
 
+def iou_accuracy(pred_labels, pred_masks, gold_labels, gold_masks):
+    iou = 0
+    for pred_label, pred_mask, gold_label, gold_mask in zip(pred_labels, pred_masks, gold_labels, gold_masks):
+        if pred_label == gold_label:
+            system_mask = np.array(pred_mask, dtype=gold_mask.dtype).reshape(gold_mask.shape)
+            system_pixels = np.sum(system_mask)
+            gold_pixels = np.sum(gold_mask)
+            intersection_pixels = np.sum(system_mask * gold_mask)
+            iou += intersection_pixels / (system_pixels + gold_pixels - intersection_pixels)
+    return 100 * iou / len(gold_labels)
+
+
+def predict_test(test, network):
+    labels, masks = network.predict(test.images)
+    with open("fashion_masks_test.txt", "w") as test_file:
+        for i in range(len(labels)):
+            print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)
+
+
 if __name__ == "__main__":
     import argparse
     import datetime
@@ -177,8 +187,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=500, type=int, help="Number of epochs.")
     parser.add_argument("--learning_rate", default=0.01)
     parser.add_argument("--learning_rate_final", default=0.0005)
-    parser.add_argument("--residual_depth", default=2, type=int, help="Depth of residual layers.")
-    parser.add_argument("--dropout", default=0.3, type=float, help="Dropout rate.")
+    parser.add_argument("--residual_depth", default=3, type=int, help="Depth of residual layers.")
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 
@@ -221,7 +230,9 @@ if __name__ == "__main__":
 
             accuracy = network.evaluate("dev", dev.images, dev.labels, dev.masks)
             print('Val accuracy', accuracy)
+
             if accuracy > best_accuracy:
+                print('^^ New best ^^')
                 best_accuracy = accuracy
                 network.save('fashion_masks/model')
 
@@ -229,7 +240,4 @@ if __name__ == "__main__":
     accuracy = network.evaluate("dev", dev.images, dev.labels, dev.masks)
     print('Final accuracy', accuracy)
 
-    labels, masks = network.predict(test.images)
-    with open("fashion_masks_test.txt", "w") as test_file:
-        for i in range(len(labels)):
-            print(labels[i], *masks[i].astype(np.uint8).flatten(), file=test_file)
+    predict_test(test, network)

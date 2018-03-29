@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from resnet import resnet, swish
+from resnet import resnet
 
 
 def iou_accuracy(pred_labels, pred_masks, gold_labels, gold_masks):
@@ -79,34 +79,33 @@ class Network:
             # - mask predictions are stored in `self.masks_predictions` of shape [None, 28, 28, 1] and type tf.float32
             #   with values 0 or 1
 
-            # Classification
+            # Classification Network
             x_label = resnet(self.images, args.residual_depth, self.is_training)
             output_label = tf.layers.dense(x_label, self.LABELS, name='output_label')
+            loss_label = tf.losses.sparse_softmax_cross_entropy(self.labels, output_label, scope='loss')
             self.labels_predictions = tf.argmax(output_label, axis=1)
 
-            # Segmentation
+            # Segmentation Network
             x_mask = resnet(self.images, args.residual_depth, self.is_training)
-            x_mask = tf.layers.dense(x_mask, 512, activation=swish)
-            x_mask = tf.layers.dense(x_mask, 1024, activation=swish)
-            x_mask = tf.layers.dense(x_mask, self.HEIGHT * self.WIDTH, activation=None, name='output_mask')
-            output_mask = tf.reshape(x_mask, [-1, self.HEIGHT, self.WIDTH, 1])
-            self.masks_predictions = tf.round(output_mask)
-
-            loss_label = tf.losses.sparse_softmax_cross_entropy(self.labels, output_label, scope='loss')
-            loss_mask = tf.losses.mean_squared_error(self.masks, output_mask)
+            x_mask = tf.layers.dense(x_mask, self.HEIGHT * self.WIDTH)
+            output_mask = tf.reshape(x_mask, [-1, self.HEIGHT, self.WIDTH, 1], name='output_mask')
+            loss_mask = tf.losses.sigmoid_cross_entropy(self.masks, output_mask, scope='loss')
+            self.masks_predictions = tf.round(tf.sigmoid(output_mask))
 
             loss = loss_label + loss_mask
-            global_step = tf.train.create_global_step()
 
-            # Compute learning rate with decay
+            # Compute learning rate with stepwise exponential decay
+            global_step = tf.train.create_global_step()
             decay_steps = args.train_size // args.batch_size
             decay_rate = (args.learning_rate_final / args.learning_rate) ** (1 / (args.epochs - 1))
             learning_rate = tf.train.exponential_decay(args.learning_rate, global_step, decay_steps, decay_rate,
                                                        staircase=True)
-
+            # Set up optimizer
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 optimizer = tf.train.AdamOptimizer(learning_rate)
+
+                # Apply gradient clipping
                 gradients, variables = zip(*optimizer.compute_gradients(loss))
                 gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
                 self.training = optimizer.apply_gradients(zip(gradients, variables),
@@ -175,10 +174,11 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=1000, type=int, help="Number of epochs.")
-    parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--learning_rate_final", default=0.0001)
-    parser.add_argument("--residual_depth", default=3, type=int, help="Depth of residual layers.")
+    parser.add_argument("--epochs", default=500, type=int, help="Number of epochs.")
+    parser.add_argument("--learning_rate", default=0.01)
+    parser.add_argument("--learning_rate_final", default=0.0005)
+    parser.add_argument("--residual_depth", default=2, type=int, help="Depth of residual layers.")
+    parser.add_argument("--dropout", default=0.3, type=float, help="Dropout rate.")
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 
@@ -222,6 +222,7 @@ if __name__ == "__main__":
             accuracy = network.evaluate("dev", dev.images, dev.labels, dev.masks)
             print('Val accuracy', accuracy)
             if accuracy > best_accuracy:
+                best_accuracy = accuracy
                 network.save('fashion_masks/model')
 
     network.load('fashion_masks/model')

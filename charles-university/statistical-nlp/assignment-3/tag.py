@@ -158,7 +158,6 @@ class HMMTagger:
             if (trigram_tag_dist[tprev2, tprev, t], bigram_tag_dist[tprev, t]) == (0, 0):
                 self.transition[tprev2, tprev, t] = self.state_uniform
             self.transition[tprev2, tprev, t] = self.div(trigram_tag_dist[tprev2, tprev, t], bigram_tag_dist[tprev, t])
-        #             assert 0 <= self.transition[tprev2, tprev, t] <= 1, self.transition[tprev2, tprev, t]
 
         for tprev, t in bigram_tag_dist:
             # Use uniform distribution if tags not seen
@@ -185,10 +184,10 @@ class HMMTagger:
         for w in unigram_output_dist:
             self.emission_unigram[w] = self.div(unigram_output_dist[w], self.text_size)
 
-        self.transition_smoother = LISmoother(self.state_uniform, self.transition_unigram, self.transition_bigram,
-                                              self.transition)
-        self.emission_smoother = LISmoother(self.symbol_uniform, self.emission_unigram, self.emission_bigram,
-                                            self.emission)
+        self.transition_smoother = LISmoother(self.state_uniform, self.transition_unigram,
+                                              self.transition_bigram, self.transition)
+        self.emission_smoother = LISmoother(self.symbol_uniform, self.emission_unigram,
+                                            self.emission_bigram, self.emission)
 
     def smooth(self, heldout_data):
         """Smooth the transition and emission tables with linear interpolation smoothing"""
@@ -196,21 +195,80 @@ class HMMTagger:
         self.transition_smoother.smooth(heldout_trigrams)
         self.emission_smoother.smooth(heldout_trigrams)
 
-    def p_transition(self, tprev2, tprev, t):
+    def tag(self, words):
+        T = len(words)
+        V = defaultdict(float)
+        B = {}
+
+        # Find the starting probabilities for each state
+        symbol = words[0]
+        for state in self.states:
+            V[0, state] = self.p_emission(state, symbol)
+            B[0, state] = None
+
+        # Find the maximum probabilities for reaching each state at time t
+        for t in range(1, T):
+            symbol = words[t]
+            for j in self.states:
+                sj = j
+                best = None
+                for i in self.states:
+                    si = i
+                    va = V[t - 1, i] + self.p_transition(sj, si)
+                    if not best or va > best[0]:
+                        best = (va, si)
+                V[t, j] = best[0] + self.p_emission(sj, symbol)
+                B[t, sj] = best[1]
+
+        # Find the highest probability for the final state
+        best = None
+        for i in self.states:
+            val = V[T - 1, i]
+            if not best or val > best[0]:
+                best = (val, i)
+
+        # traverse the back-pointers B to find the state sequence
+        current = best[1]
+        sequence = [current]
+        for t in range(T - 1, 0, -1):
+            last = B[t, current]
+            sequence.append(last)
+            current = last
+
+        sequence.reverse()
+        return list(zip(words, sequence))
+
+    def p_transition(self, tprev, t):
         return self.transition_smoother.lambdas.dot([
             self.state_uniform,
             self.transition_unigram[t],
             self.transition_bigram[tprev, t],
-            self.transition[tprev2, tprev]
+            0
         ])
 
-    def p_emission(self, tprev, t, w):
+    def p_emission(self, t, w):
         return self.emission_smoother.lambdas.dot([
             self.symbol_uniform,
             self.emission_unigram[w],
             self.emission_bigram[t, w],
-            self.emission[tprev, t, w]
+            0
         ])
+
+    # def p_transition(self, tprev2, tprev, t):
+    #     return self.transition_smoother.lambdas.dot([
+    #         self.state_uniform,
+    #         self.transition_unigram[t],
+    #         self.transition_bigram[tprev, t],
+    #         self.transition[tprev2, tprev]
+    #     ])
+    #
+    # def p_emission(self, tprev, t, w):
+    #     return self.emission_smoother.lambdas.dot([
+    #         self.symbol_uniform,
+    #         self.emission_unigram[w],
+    #         self.emission_bigram[t, w],
+    #         self.emission[tprev, t, w]
+    #     ])
 
     def div(self, a, b):
         """Divides a and b safely"""
@@ -252,6 +310,21 @@ splits_en = split_all(words_en)
 splits_cz = split_all(words_cz)
 
 train, heldout, test = splits_en[0]
+
+words, tags = list(zip(*(train + heldout + test)))
+# tag_set, word_set = list(set(nltk.bigrams(tags, pad_left=True))), list(set(words))
+tag_set, word_set = list(set(tags)), list(set(words))
+
+labeled = train[:10_000]
+unlabeled = train[10_000:]
+
+tagger = HMMTagger(labeled, tag_set, word_set)
+tagger.smooth(heldout)
+
+print(tagger.tag(words[:10]))
+
+print(words[:10])
+print(tags[:10])
 
 # lambdas = em_algorithm(train, heldout)
 #

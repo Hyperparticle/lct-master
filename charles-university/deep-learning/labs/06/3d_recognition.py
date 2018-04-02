@@ -13,6 +13,7 @@ class Dataset:
         self._labels = data["labels"] if "labels" in data else None
 
         # Normalize voxels
+        # self._voxels = (self._voxels - self._voxels.mean(axis=0))
         # self._voxels = (self._voxels - self._voxels.mean(axis=0)) / (self._voxels.std(axis=0))
 
     def split(self, ratio):
@@ -140,7 +141,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=500, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
     parser.add_argument("--modelnet_dim", default=20, type=int, help="Dimension of ModelNet data.")
     parser.add_argument("--train_split", default=0.9, type=float, help="Ratio of examples to use as train.")
     parser.add_argument("--learning_rate", default=0.01)

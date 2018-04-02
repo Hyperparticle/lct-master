@@ -12,10 +12,6 @@ class Dataset:
         self._voxels = data["voxels"]
         self._labels = data["labels"] if "labels" in data else None
 
-        # Normalize voxels
-        # self._voxels = (self._voxels - self._voxels.mean(axis=0))
-        # self._voxels = (self._voxels - self._voxels.mean(axis=0)) / (self._voxels.std(axis=0))
-
     def split(self, ratio):
         split = int(len(self._voxels) * ratio)
 
@@ -36,7 +32,7 @@ class Dataset:
     def labels(self):
         return self._labels
 
-    def batches(self, batch_size, shift_fraction=0.0):
+    def batches(self, batch_size):
         x, y = self._voxels, self._labels
 
         while True:
@@ -60,7 +56,7 @@ class Network:
             self.labels = tf.placeholder(tf.int64, [None], name="labels")
             self.is_training = tf.placeholder(tf.bool, [], name="is_training")
 
-            # TODO: Computation and training.
+            # Computation and training.
             #
             # The code below assumes that:
             # - loss is stored in `loss`
@@ -76,10 +72,6 @@ class Network:
 
             # Compute learning rate with stepwise exponential decay
             global_step = tf.train.create_global_step()
-            # decay_steps = args.train_size // args.batch_size
-            # decay_rate = (args.learning_rate_final / args.learning_rate) ** (1 / (args.epochs - 1))
-            # learning_rate = tf.train.exponential_decay(args.learning_rate, global_step, decay_steps, decay_rate,
-            #                                            staircase=True)
 
             # Set up optimizer
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -145,9 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("--modelnet_dim", default=20, type=int, help="Dimension of ModelNet data.")
     parser.add_argument("--train_split", default=0.9, type=float, help="Ratio of examples to use as train.")
     parser.add_argument("--learning_rate", default=0.01)
-    parser.add_argument("--learning_rate_final", default=0.0005)
-    parser.add_argument("--residual_depth", default=3, type=int, help="Depth of residual layers.")
-    parser.add_argument("--shift_fraction", default=0.0, type=float)
+    parser.add_argument("--residual_depth", default=4, type=int, help="Depth of residual layers.")
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 
@@ -177,7 +167,7 @@ if __name__ == "__main__":
             print('Epoch', i)
 
             with tqdm(total=len(train.voxels)) as pbar:
-                batches = train.batches(args.batch_size, args.shift_fraction)
+                batches = train.batches(args.batch_size)
                 steps_per_epoch = len(train.voxels)
 
                 total = 0

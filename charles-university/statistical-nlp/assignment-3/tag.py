@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import itertools
 import nltk
+from tqdm import tqdm
 from collections import Counter, defaultdict
 
 
@@ -113,9 +114,11 @@ class LISmoother:
 class HMMTagger:
     def __init__(self, tagged_data, tag_set, word_set):
         # Prepend two tokens to avoid beginning-of-data problems
+        self.tag_set = set(tag_set)
+        self.word_set = set(word_set)
 
-        self.states = tag_set
-        self.symbols = word_set
+        self.states = list(self.tag_set)
+        self.symbols = list(self.word_set)
 
         self.text_size = len(tagged_data)
 
@@ -197,13 +200,14 @@ class HMMTagger:
 
     def tag(self, words):
         T = len(words)
+
         V = defaultdict(float)
         B = {}
 
         # Find the starting probabilities for each state
         symbol = words[0]
         for state in self.states:
-            V[0, state] = self.p_emission(state, symbol)
+            V[0, state] = self.p_emission(*state, symbol)
             B[0, state] = None
 
         # Find the maximum probabilities for reaching each state at time t
@@ -214,10 +218,10 @@ class HMMTagger:
                 best = None
                 for i in self.states:
                     si = i
-                    va = V[t - 1, i] + self.p_transition(sj, si)
+                    va = V[t - 1, i] * self.p_transition(*sj, si)
                     if not best or va > best[0]:
                         best = (va, si)
-                V[t, j] = best[0] + self.p_emission(sj, symbol)
+                V[t, j] = best[0] * self.p_emission(*sj, symbol)
                 B[t, sj] = best[1]
 
         # Find the highest probability for the final state
@@ -236,67 +240,39 @@ class HMMTagger:
             current = last
 
         sequence.reverse()
-        return list(zip(words, sequence))
+        return list(zip(*sequence))[1]
 
-    def p_transition(self, tprev, t):
+    def evaluate(self, data):
+        total, correct = 0, 0
+        for sentence in tqdm(data):
+            words, tags = zip(*sentence)
+            predicted_tags = self.tag(words)
+            for tag, pred in zip(tags, predicted_tags):
+                if tag == pred:
+                    correct += 1
+                total += 1
+
+        return correct / total
+
+    def p_transition(self, tprev2, tprev, t):
         return self.transition_smoother.lambdas.dot([
             self.state_uniform,
             self.transition_unigram[t],
             self.transition_bigram[tprev, t],
-            0
+            self.transition[tprev2, tprev]
         ])
 
-    def p_emission(self, t, w):
+    def p_emission(self, tprev, t, w):
         return self.emission_smoother.lambdas.dot([
             self.symbol_uniform,
             self.emission_unigram[w],
             self.emission_bigram[t, w],
-            0
+            self.emission[tprev, t, w]
         ])
-
-    # def p_transition(self, tprev2, tprev, t):
-    #     return self.transition_smoother.lambdas.dot([
-    #         self.state_uniform,
-    #         self.transition_unigram[t],
-    #         self.transition_bigram[tprev, t],
-    #         self.transition[tprev2, tprev]
-    #     ])
-    #
-    # def p_emission(self, tprev, t, w):
-    #     return self.emission_smoother.lambdas.dot([
-    #         self.symbol_uniform,
-    #         self.emission_unigram[w],
-    #         self.emission_bigram[t, w],
-    #         self.emission[tprev, t, w]
-    #     ])
 
     def div(self, a, b):
         """Divides a and b safely"""
         return a / b if b != 0 else 0
-
-    # def p_uniform(self):
-    #     """Calculates the probability of choosing a word uniformly at random"""
-    #     return self.div(1, self.unigram_count)
-    #
-    # def p_unigram(self, w):
-    #     """Calculates the probability a unigram appears in the distribution"""
-    #     return self.div(self.unigram_dist[w], self.total_unigram_count)
-    #
-    # def p_bigram_cond(self, wprev, w):
-    #     """Calculates the probability a word appears in the distribution given the previous word"""
-    #     # If neither ngram has been seen, use the uniform distribution for smoothing purposes
-    #     if (self.bigram_dist[wprev, w], self.unigram_dist[wprev]) == (0, 0):
-    #         return self.p_uniform()
-    #
-    #     return self.div(self.bigram_dist[wprev, w], self.unigram_dist[wprev])
-    #
-    # def p_trigram_cond(self, wprev2, wprev, w):
-    #     """Calculates the probability a word appears in the distribution given the previous word"""
-    #     # If neither ngram has been seen, use the uniform distribution for smoothing purposes
-    #     if (self.trigram_dist[wprev2, wprev, w], self.bigram_dist[wprev2, wprev]) == (0, 0):
-    #         return self.p_uniform()
-    #
-    #     return self.div(self.trigram_dist[wprev2, wprev, w], self.bigram_dist[wprev2, wprev])
 
 
 # Read the texts into memory
@@ -312,8 +288,7 @@ splits_cz = split_all(words_cz)
 train, heldout, test = splits_en[0]
 
 words, tags = list(zip(*(train + heldout + test)))
-# tag_set, word_set = list(set(nltk.bigrams(tags, pad_left=True))), list(set(words))
-tag_set, word_set = list(set(tags)), list(set(words))
+tag_set, word_set = set(nltk.bigrams(tags, pad_left=True)), set(words)
 
 labeled = train[:10_000]
 unlabeled = train[10_000:]
@@ -321,31 +296,8 @@ unlabeled = train[10_000:]
 tagger = HMMTagger(labeled, tag_set, word_set)
 tagger.smooth(heldout)
 
-print(tagger.tag(words[:10]))
+print(tagger.tag(words[:4]))
 
 print(words[:10])
 print(tags[:10])
 
-# lambdas = em_algorithm(train, heldout)
-#
-# print(lambdas)
-
-# words, tags = list(zip(*(train + heldout + test)))
-# states, symbols = list(set(tags)), list(set(words))
-#
-# test = sentence_split(test)
-#
-# labeled = sentence_split(train[:10_000])
-# unlabeled = sentence_split(train[10_000:])
-#
-# trainer = HMM(states, symbols)
-#
-# tagger = trainer.train_supervised(labeled)
-#
-# print('\n')
-#
-# print(tagger.evaluate(test))
-#
-# for _ in range(5):
-#     tagger = trainer.train_unsupervised(unlabeled, model=tagger, max_iterations=1)
-#     print(tagger.evaluate(test))

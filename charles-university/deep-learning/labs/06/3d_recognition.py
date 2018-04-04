@@ -133,10 +133,10 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--modelnet_dim", default=20, type=int, help="Dimension of ModelNet data.")
     parser.add_argument("--train_split", default=0.9, type=float, help="Ratio of examples to use as train.")
-    parser.add_argument("--learning_rate", default=0.01)
+    parser.add_argument("--learning_rate", default=0.005)
     parser.add_argument("--residual_depth", default=4, type=int, help="Depth of residual layers.")
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()

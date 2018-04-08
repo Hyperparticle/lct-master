@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm
 
 import nets.nasnet.nasnet
 
@@ -11,7 +12,10 @@ class Dataset:
         self._labels = data["labels"] if "labels" in data else None
 
         self._shuffle_batches = shuffle_batches
-        self._permutation = np.random.permutation(len(self._images)) if self._shuffle_batches else np.arange(len(self._images))
+        self._permutation = np.random.permutation(len(self._images)) if self._shuffle_batches else np.arange(
+            len(self._images))
+        # Normalize images
+        # self._images = (self._images - self._images.mean(axis=0)) / (self._images.std(axis=0))
 
     @property
     def images(self):
@@ -28,20 +32,32 @@ class Dataset:
 
     def epoch_finished(self):
         if len(self._permutation) == 0:
-            self._permutation = np.random.permutation(len(self._images)) if self._shuffle_batches else np.arange(len(self._images))
+            self._permutation = np.random.permutation(len(self._images)) if self._shuffle_batches else np.arange(
+                len(self._images))
             return True
         return False
+
+    def batches(self, batch_size, shift_fraction=0.):
+        x, y = self._images, self._labels
+
+        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+            width_shift_range=shift_fraction, height_shift_range=shift_fraction)
+        gen = train_datagen.flow(x, y, batch_size=batch_size)
+
+        while True:
+            x_batch, y_batch = gen.next()
+            yield x_batch, y_batch
 
 
 class Network:
     WIDTH, HEIGHT = 224, 224
+    CLASSES = 250
 
-    def __init__(self, threads, seed=42):
+    def __init__(self, seed=42):
         # Create an empty graph and a session
         graph = tf.Graph()
         graph.seed = seed
-        self.session = tf.Session(graph = graph, config=tf.ConfigProto(inter_op_parallelism_threads=threads,
-                                                                       intra_op_parallelism_threads=threads))
+        self.session = tf.Session(graph=graph)
 
     def construct(self, args):
         with self.session.graph.as_default():
@@ -56,12 +72,32 @@ class Network:
                 features, _ = nets.nasnet.nasnet.build_nasnet_mobile(images, num_classes=None, is_training=False)
             self.nasnet_saver = tf.train.Saver()
 
-            # TODO: Computation and training.
+            # Computation and training.
             #
             # The code below assumes that:
             # - loss is stored in `self.loss`
             # - training is stored in `self.training`
             # - label predictions are stored in `self.predictions`
+
+            x = features
+            x = tf.layers.dense(x, 2048, activation=tf.nn.relu)
+
+            output = tf.layers.dense(x, self.CLASSES)
+
+            self.predictions = tf.argmax(output, axis=1)
+            self.loss = tf.losses.sparse_softmax_cross_entropy(self.labels, output, scope='loss')
+
+            global_step = tf.train.create_global_step()
+
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                optimizer = tf.train.AdamOptimizer(args.learning_rate)
+
+                # Apply gradient clipping
+                gradients, variables = zip(*optimizer.compute_gradients(self.loss))
+                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                self.training = optimizer.apply_gradients(zip(gradients, variables),
+                                                          global_step=global_step, name='training')
 
             # Summaries
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
@@ -76,6 +112,9 @@ class Network:
                 for dataset in ["dev", "test"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", self.given_loss),
                                                tf.contrib.summary.scalar(dataset + "/accuracy", self.given_accuracy)]
+
+            # Construct the saver
+            self.saver = tf.train.Saver()
 
             # Initialize variables
             self.session.run(tf.global_variables_initializer())
@@ -108,6 +147,12 @@ class Network:
             labels.append(self.session.run(self.predictions, {self.images: images, self.is_training: False}))
         return np.concatenate(labels)
 
+    def save(self, path):
+        self.saver.save(self.session, path)
+
+    def load(self, path):
+        self.saver.restore(self.session, path)
+
 
 if __name__ == "__main__":
     import argparse
@@ -120,10 +165,12 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=None, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=None, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=128, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--nasnet", default="nets/nasnet/model.ckpt", type=str, help="NASNet checkpoint path.")
-    parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+    parser.add_argument("--learning_rate", default=0.001)
+    parser.add_argument("--shift_fraction", default=0.0)
+    parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 
     # Create logdir name
@@ -141,16 +188,37 @@ if __name__ == "__main__":
     test = Dataset("nsketch/nsketch-test.npz", shuffle_batches=False)
 
     # Construct the network
-    network = Network(threads=args.threads)
+    network = Network()
     network.construct(args)
 
-    # Train
-    for i in range(args.epochs):
-        while not train.epoch_finished():
-            images, labels = train.next_batch(args.batch_size)
-            network.train_batch(images, labels)
+    if not args.load:
+        best_accuracy = 0
 
-        network.evaluate("dev", dev, args.batch_size)
+        # Train
+        for i in range(args.epochs):
+            print('Epoch', i)
+
+            with tqdm(total=len(train.images)) as pbar:
+                batches = train.batches(args.batch_size, args.shift_fraction)
+                steps_per_epoch = len(train.images)
+                total = 0
+                while total < steps_per_epoch:
+                    images, labels = next(batches)
+                    network.train_batch(images, labels)
+                    pbar.update(len(images))
+                    total += len(images)
+
+            accuracy = network.evaluate("dev", dev, args.batch_size)
+            print('Val accuracy', accuracy)
+
+            if accuracy > best_accuracy:
+                print('^^ New best ^^')
+                best_accuracy = accuracy
+                network.save('nsketch/model')
+
+    network.load('nsketch/model')
+    accuracy = network.evaluate("dev", dev, args.batch_size)
+    print('Final accuracy', accuracy)
 
     # Predict test data
     with open("{}/nsketch_transfer_test.txt".format(args.logdir), "w") as test_file:

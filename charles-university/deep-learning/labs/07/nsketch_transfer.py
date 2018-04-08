@@ -136,9 +136,9 @@ if __name__ == "__main__":
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
-    train = Dataset("nsketch-train.npz")
-    dev = Dataset("nsketch-dev.npz", shuffle_batches=False)
-    test = Dataset("nsketch-test.npz", shuffle_batches=False)
+    train = Dataset("nsketch/nsketch-train.npz")
+    dev = Dataset("nsketch/nsketch-dev.npz", shuffle_batches=False)
+    test = Dataset("nsketch/nsketch-test.npz", shuffle_batches=False)
 
     # Construct the network
     network = Network(threads=args.threads)

@@ -69,7 +69,8 @@ class Network:
             # Create NASNet
             images = 2 * (tf.tile(tf.image.convert_image_dtype(self.images, tf.float32), [1, 1, 1, 3]) - 0.5)
             with tf.contrib.slim.arg_scope(nets.nasnet.nasnet.nasnet_mobile_arg_scope()):
-                features, _ = nets.nasnet.nasnet.build_nasnet_mobile(images, num_classes=None, is_training=False)
+                features, _ = nets.nasnet.nasnet.build_nasnet_mobile(images, num_classes=None,
+                                                                     is_training=True)
             self.nasnet_saver = tf.train.Saver()
 
             # Computation and training.
@@ -81,30 +82,33 @@ class Network:
 
             with tf.variable_scope('classify'):
                 x = features
-                x = tf.layers.dense(x, 2048, activation=tf.nn.relu)
+
+                x = tf.layers.dense(x, 1024, activation=tf.nn.swish)
 
                 output = tf.layers.dense(x, self.CLASSES)
 
                 self.predictions = tf.argmax(output, axis=1)
                 self.loss = tf.losses.sparse_softmax_cross_entropy(self.labels, output)
 
-                global_step = tf.train.create_global_step()
+            classify_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='classify')
+            finetune_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
-            # classify = tf.global_variables(scope='classify')
-            # with tf.control_dependencies(classify):
-            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='classify')
-            optimizer = tf.train.AdamOptimizer(args.learning_rate)
-            self.training = optimizer.minimize(self.loss, global_step=global_step, var_list=train_vars)
+            global_step = tf.train.create_global_step()
 
-            # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            # with tf.control_dependencies(update_ops):
-            #     optimizer = tf.train.AdamOptimizer(args.learning_rate)
-            #
-            #     # Apply gradient clipping
-            #     gradients, variables = zip(*optimizer.compute_gradients(self.loss))
-            #     gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
-            #     self.training = optimizer.apply_gradients(zip(gradients, variables),
-            #                                               global_step=global_step, name='training')
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                optimizer = tf.train.AdamOptimizer(args.learning_rate)
+
+                # Apply gradient clipping
+                gradients, variables = zip(*optimizer.compute_gradients(self.loss, var_list=classify_vars))
+                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                self.train_classify = optimizer.apply_gradients(zip(gradients, variables),
+                                                                global_step=global_step)
+
+                gradients, variables = zip(*optimizer.compute_gradients(self.loss, var_list=finetune_vars))
+                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                self.train_finetune = optimizer.apply_gradients(zip(gradients, variables),
+                                                                global_step=global_step)
 
             # Summaries
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
@@ -131,8 +135,13 @@ class Network:
             # Load NASNet
             self.nasnet_saver.restore(self.session, args.nasnet)
 
-    def train_batch(self, images, labels):
-        self.session.run([self.training, self.summaries["train"]], {self.images: images, self.labels: labels, self.is_training: True})
+    def train_batch(self, images, labels, finetune=False):
+        if finetune:
+            self.session.run([self.train_finetune, self.summaries["train"]],
+                             {self.images: images, self.labels: labels, self.is_training: True})
+        else:
+            self.session.run([self.train_classify, self.summaries["train"]],
+                             {self.images: images, self.labels: labels, self.is_training: True})
 
     def evaluate(self, dataset_name, dataset, batch_size):
         loss, accuracy = 0, 0
@@ -172,7 +181,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=128, type=int, help="Batch size.")
+    parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--nasnet", default="nets/nasnet/model.ckpt", type=str, help="NASNet checkpoint path.")
     parser.add_argument("--learning_rate", default=0.001)
@@ -205,13 +214,15 @@ if __name__ == "__main__":
         for i in range(args.epochs):
             print('Epoch', i)
 
+            finetune = i > 2
+
             with tqdm(total=len(train.images)) as pbar:
                 batches = train.batches(args.batch_size, args.shift_fraction)
                 steps_per_epoch = len(train.images)
                 total = 0
                 while total < steps_per_epoch:
                     images, labels = next(batches)
-                    network.train_batch(images, labels)
+                    network.train_batch(images, labels, finetune=finetune)
                     pbar.update(len(images))
                     total += len(images)
 

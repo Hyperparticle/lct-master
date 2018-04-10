@@ -14,6 +14,7 @@ class Dataset:
         self._shuffle_batches = shuffle_batches
         self._permutation = np.random.permutation(len(self._images)) if self._shuffle_batches else np.arange(
             len(self._images))
+        
         # Normalize images
         # self._images = (self._images - self._images.mean(axis=0)) / (self._images.std(axis=0))
 
@@ -68,8 +69,8 @@ class Network:
 
             # Create NASNet
             images = 2 * (tf.tile(tf.image.convert_image_dtype(self.images, tf.float32), [1, 1, 1, 3]) - 0.5)
-            with tf.contrib.slim.arg_scope(nets.nasnet.nasnet.nasnet_mobile_arg_scope()):
-                features, _ = nets.nasnet.nasnet.build_nasnet_mobile(images, num_classes=None,
+            with tf.contrib.slim.arg_scope(nets.nasnet.nasnet.nasnet_large_arg_scope()):
+                features, _ = nets.nasnet.nasnet.build_nasnet_large(images, num_classes=None,
                                                                      is_training=True)
             self.nasnet_saver = tf.train.Saver()
 

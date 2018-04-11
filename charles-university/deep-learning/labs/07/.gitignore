@@ -1,2 +1,4 @@
 /nets/nasnet/model*
 /NASNet.README
+/nets/resnet/*.ckpt
+/nets/resnet/*.graph

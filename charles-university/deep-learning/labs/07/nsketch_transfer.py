@@ -182,7 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--weights", default="nets/resnet/resnet_v2_152.ckpt", type=str, help="Checkpoint path.")
     parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--shift_fraction", default=0.0)
+    parser.add_argument("--shift_fraction", default=0.1)
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 

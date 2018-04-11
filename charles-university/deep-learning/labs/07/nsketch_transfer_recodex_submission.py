@@ -71,7 +71,8 @@ class Network:
             # Create NASNet
             images = 2 * (tf.tile(tf.image.convert_image_dtype(self.images, tf.float32), [1, 1, 1, 3]) - 0.5)
             with tf.contrib.slim.arg_scope(nets.nasnet.nasnet.nasnet_mobile_arg_scope()):
-                features, _ = nets.nasnet.nasnet.build_nasnet_mobile(images, num_classes=None, is_training=False)
+                features, _ = nets.nasnet.nasnet.build_nasnet_mobile(images, num_classes=None,
+                                                                     is_training=True)
             self.nasnet_saver = tf.train.Saver()
 
             # Computation and training.
@@ -83,30 +84,33 @@ class Network:
 
             with tf.variable_scope('classify'):
                 x = features
-                x = tf.layers.dense(x, 2048, activation=tf.nn.relu)
+
+                x = tf.layers.dense(x, 1024, activation=tf.nn.swish)
 
                 output = tf.layers.dense(x, self.CLASSES)
 
                 self.predictions = tf.argmax(output, axis=1)
                 self.loss = tf.losses.sparse_softmax_cross_entropy(self.labels, output)
 
-                global_step = tf.train.create_global_step()
+            classify_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='classify')
+            finetune_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
-            # classify = tf.global_variables(scope='classify')
-            # with tf.control_dependencies(classify):
-            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='classify')
-            optimizer = tf.train.AdamOptimizer(args.learning_rate)
-            self.training = optimizer.minimize(self.loss, global_step=global_step, var_list=train_vars)
+            global_step = tf.train.create_global_step()
 
-            # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            # with tf.control_dependencies(update_ops):
-            #     optimizer = tf.train.AdamOptimizer(args.learning_rate)
-            #
-            #     # Apply gradient clipping
-            #     gradients, variables = zip(*optimizer.compute_gradients(self.loss))
-            #     gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
-            #     self.training = optimizer.apply_gradients(zip(gradients, variables),
-            #                                               global_step=global_step, name='training')
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                optimizer = tf.train.AdamOptimizer(args.learning_rate)
+
+                # Apply gradient clipping
+                gradients, variables = zip(*optimizer.compute_gradients(self.loss, var_list=classify_vars))
+                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                self.train_classify = optimizer.apply_gradients(zip(gradients, variables),
+                                                                global_step=global_step)
+
+                gradients, variables = zip(*optimizer.compute_gradients(self.loss, var_list=finetune_vars))
+                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                self.train_finetune = optimizer.apply_gradients(zip(gradients, variables),
+                                                                global_step=global_step)
 
             # Summaries
             self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.labels, self.predictions), tf.float32))
@@ -133,8 +137,13 @@ class Network:
             # Load NASNet
             self.nasnet_saver.restore(self.session, args.nasnet)
 
-    def train_batch(self, images, labels):
-        self.session.run([self.training, self.summaries[\"train\"]], {self.images: images, self.labels: labels, self.is_training: True})
+    def train_batch(self, images, labels, finetune=False):
+        if finetune:
+            self.session.run([self.train_finetune, self.summaries[\"train\"]],
+                             {self.images: images, self.labels: labels, self.is_training: True})
+        else:
+            self.session.run([self.train_classify, self.summaries[\"train\"]],
+                             {self.images: images, self.labels: labels, self.is_training: True})
 
     def evaluate(self, dataset_name, dataset, batch_size):
         loss, accuracy = 0, 0
@@ -174,11 +183,11 @@ if __name__ == \"__main__\":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument(\"--batch_size\", default=128, type=int, help=\"Batch size.\")
+    parser.add_argument(\"--batch_size\", default=64, type=int, help=\"Batch size.\")
     parser.add_argument(\"--epochs\", default=200, type=int, help=\"Number of epochs.\")
     parser.add_argument(\"--nasnet\", default=\"nets/nasnet/model.ckpt\", type=str, help=\"NASNet checkpoint path.\")
     parser.add_argument(\"--learning_rate\", default=0.001)
-    parser.add_argument(\"--shift_fraction\", default=0.0)
+    parser.add_argument(\"--shift_fraction\", default=0.1)
     parser.add_argument(\"--load\", action='store_true')
     args = parser.parse_args()
 
@@ -207,13 +216,15 @@ if __name__ == \"__main__\":
         for i in range(args.epochs):
             print('Epoch', i)
 
+            finetune = i > 4
+
             with tqdm(total=len(train.images)) as pbar:
                 batches = train.batches(args.batch_size, args.shift_fraction)
                 steps_per_epoch = len(train.images)
                 total = 0
                 while total < steps_per_epoch:
                     images, labels = next(batches)
-                    network.train_batch(images, labels)
+                    network.train_batch(images, labels, finetune=finetune)
                     pbar.update(len(images))
                     total += len(images)
 
@@ -236,7 +247,7 @@ if __name__ == \"__main__\":
             print(label, file=test_file)
 """
 
-test_data = b'{Wp48S^xk9=GL@E0stWa761SMbT8$j;2Wa~*j)e^jeSh{)<&u<X;JnJwG|@i7H9($f!3{DB&_<0e6kq@62rU9h;=$2$!#_S4>{R*;ABO<w(#-L{TS9k5_wU?Y)XU-7gvwqC>ueU%@b9&vxTo>o=X?dnHfL1c?AHsJGW_u!=b_>+DY%n`v$31eZd|=eNY`ZMA==l0x>c)x$}A}qu(rDKQF5t5u}*3SsF+mxG(qkY#f`O>&&a+C|=ABsC`{j(KQF8NN&;n9X;?v?_h^*ccSC^iJtQdPLVg^N|Ee!hYQZV4b7*3(MBc<XXP4@vHy!N2#;U9C=;)Nc;xDM-*~4ZYQtXeKZWW1i`Oy%IdOrDb$2mz(gv|?e<#5Pok=0J&UR3jB{oy`bJk9L{%mX?TrDE&+KPXG#`)CVk`JPOJ9>aA#!KJI#kg_RQwt(}z6_5k;uO+uC+wqljR!{q?MTv4UgeJ#^E%wSWOz=(kVX*OqLE$U)m6qyK>-&aCA6;QW$%y{qs9UE&fIf?e0PQE3>4I~*VdNAfrC#vv#~`m0Yr1Mj;e)G$^QoyzcktwyX5$cWEsoZ>%~%}$&ndxCp;<i{Tl-k@6H{Zu*3DtUTH%Akxhddr&y?~Q(+T-;)4V*_LDDN`CM##B8v_XU5l7)`qN8w9Eh5j;+8&zj6GxMfgh0u3dOzNbq)b{9}bZcpY0iFnz6R%^KMW{PL$*v%*p-Mv)?KqZ^d-?IdaXJw+02hCK^@sW@yy56@z9Y;?C@4tv7>xIkTpUgpw$|briXHc=rnL)D&17?Z1s3FgJg~6h&G2W{2s%6Q3TQwFkaAuhvcoWegh%5k_kEOwb!3C;ZlMuCAth9X+`7*!Y9!4(sMI$%s1;5u%9Px`NsVnd~^oo0<HEs?VA9zKG(TABp6e`RDSdS>HN{Gqh+8gUIiHGJo$oNReed$Zt{OJ3CO|(O~V{2-FRp)6+q(KT`kMtX?5Lni=o>I4u5{H?2c<S@0?yLW%g|7NPn=*J2~NuVQ-fViJ0z$0SC<9&o7%yOCr?z@Sw!kFOCo7`UYXm-4x@u!1>&vAWa+zaY?<`>e?SD8u(O4DLf3?A85g8rz3vA~0%9Zv={i`f$*)zDqlU%CV0KEvysG2(Gunox9#0mt0zUMfEz^dj<#xXrN~^ojhYHDPZ{Qom`+3o#(RLLPw3XHq-QOI{u0ElEtjtcX*FF-B(1a-m`7$K7ic)M|r$6q@m8i(p6!LsctrW+R@?z*D(8%QIO;xMh@3CZV-fK$%)y>7dTRvNKbznls&1V2yt;Fo!HW^?zd%?mUX_GHk<vo8@l5F|48}45-^Wd&4Ua$2ps#lxr_x}uEF9M<%_=+Y^sB|PN>giV_l-;?h0qRCVNI`YkST0aYIgqs<glDSII?Y?#cnLx%#;@Rj7!37qGwl?B0vZv6BwWj2E>YYcFE6%z>^bKFYZXBaJsWP(VVY$K!7hfr<&>wtObSiSM4iR}ECEQzQWRL!+76i^9g)Z|jAyGhe;(vC?@F^_g(AL97?yFR(|VLxsS?hU0oKRTy>H_J}diH6TRF$SWDBlFF8qrgpf4PA^PyIb0`;&yge-TF;?->DA0hhQd}tU=d(V5HhOg{7w%7sIz_l&et$+a+{I46c8WQ2n!#>n9w>6P|!}#Yi8t<R-izZLD4vT8}(v4YaU$83un7g>dmM`&4}^$X5fc^J||xpGn-WT9>N{QWNfh#Uw~HeDBx{fk`UgS<9?&KGboo|DHg^1R{>UoaWG>Tz2n|Yq05H~)Q888!2@H;%0H3GqN(72A3P>0>xek|oNzVBW^S^DA?d#bLoh(ZHg}Y5yJP%ryxs~VEls@;#SqQd0)&P6zQuK3T40B|cg43XrW(5rW$g;(|7=72^<mMLA5S}=J$xJdlPj6LQZh@)ws!drIi}V3n02ZoE%eq?!NQjvAX;WO4(iF_C{_0*-v3*@p+dE0Ptxj487k7zxYn9QaJo!q1*2)+U{X$a$5j5FM}R&Z8OKX2>~Jz1#;W*~y*e{6$EA+@Aez*;uX(?bfOP*o_OO?P98s40(WgW&^RW73{jwK3H(GhNBc?PR8wYU-^Y_sq|IW$0e>hKK9@qGYFAZLJosm;Y*!<R&e!{HLDnWbuZaCF6(^=>;5qPU{7K+LqZINoYJpXdk_V+R~%E)ZV$h0gP)Q<5Tr|UCvn2<fHhuPC&V~oz1p5VtjVil;(3k<2jKWB8%TPaZ*;ElQOp=*bFWnA9^AE~LrggK(JsK9)hvn)tI3P<wVXnjo4<>2sCw`lM=1K2zdUk3T(py(}%t<-ww$@PWS%M46L#2hmmBCK{3!7LhV;(afttf$G-<}4`b5ym#yrQ$h%9p@?C&_wU&;F{ypJ@aCfUwxTNWPF`G?oM30_WqV^7%`vqZf_)lmQX6IirkmNd?BoC;r;|Zv8J?2yG*wG7PNENpzd*%=O{pv3|2%5?nDgP+&dB~^<#0_eD)}pKF%bh)}&G2-Www)jO){bxdf_S7&^30=DqRki-C_rJ&lwvwYY>0)a0zzgjyLR@?FqJaD!w4IeuWhj;Oy9;2zhepbY=BsBMRJgb(-NWR*Sir(Q5{^T<dP6Sm^t#jQh8)qP>q8q7vd{xFlZ+*@>H%eX<!$Eqb%^vy+bSASeT!QYA|3sqLOPL>w97-puIE|sg@22#+WfLpa3x#LV1M#;O1Gguqp5K`Slw6e^d>9l5(vK{;v;Dl>YH@-&Npff!8{7X++QE`tY2<vNknb$q?^e1*za+Us#?Mb;4M1spa{iaKN*JWR&+rQlwfxJB6opUb5r(IA{qpv<Uq9Wr}=>eb0KL%s|ZRn_p{vgZqG;pt#Nuc)Itn?*BBI=Fc=coj(3dhgJxIY;~yk6q#!E*INz%gblRH6w{3JAYSxI8SKvpwzB_XNsrz+8~Y?;35cPU{q3hj)2lGkeGF>42DuBqHG^v6~-!!d2y{g<i|rd+_k#nqaE!t5-VH9AULvDS8NdTZm{NB!h36g<NO>v=?WM>4v26kf}6Zwnk>zXLGUIR#6nG?VNtde|qhw@1j^+jewdB#vMi2E*m>V>(2}c@gzX9d0RbZBwofh2uhY%K90+d!*Rt00+Rm!Er69g2Ov(Cgi0Uo3&3s#>O*0zQebTI$U&U|Y_b(*H#=RnkC^>Ta;m~>cmcu_DEgDb5i!WI5g%g$)O9?jJ&x~u)ncMvU_9i_Pv;p@hF3YOgQ8M1LG`lk)(8xG`F#H35pSMIx-9nsPtU|L0TqY^bMzIVXvjvP8xisEq&#{jiUylzKcU1^Sdc17C=;aRav8{Nv4R0?BN~IGeQF|+7!$9vV=j0m?OSmzt@>*GW78;tLRJV|BkG9ZJSuUYe`z;18XG1x6~Yk~&E{MU`K3U}eI~F;z71C-HBIqT{(;hpTb%-*Y8~s0dr!uMuwlURQb!iZ-C@d*so=xxt~^CJ%eP}W(;r%1y_hgUc3VD&1;^GN;XtKk%)e#<D!?s{tBgvOtZvs-9J<4_6z_!OS4+$t)cH*7SVh?GH0|57x%v}0%LzP7iChh?l2eY;f`q=N@`YI%#(Jack{FkEFVndNe8Q$sfu8RGguIvr?P@eZ00HzBq&ENnXX<+fvBYQl0ssI200dcD'
+test_data = b'{Wp48S^xk9=GL@E0stWa761SMbT8$j;2Z@C{apYUjRN^fX--d!I+rlqYfQ_7t}hB50>>K+=LH9y>4SDPC6;W|!F4QOtFq=hF1}0EP#5zc+^O<YIwt$^Bur>uQx;yQXLGI=Yvw^xV%U8Q0fL8WFZEd}ufo%LLl7oJ!b;AiICyNbPET=HIj<zLOI<8PP4jJYA83L=^^b*T4*}Z(9>jIe-P;8DqX3Y_G5x8|Zg~p65LBMb9K@z)4;EUP&JmyTu!UXmenZmz<)T0~<NG(wA<4~0a0{J!gh`QQcu|{%z1|?8V*@pmk+{^madVS9v1Fy=(8Qi3G;`+!GP>_nnAZ%WC@(>@!NOQ8=l*llQ6m#_X*mIiok+<^_8%1S5o?I%KZi1cR1k;k=7PlPCJDqAoXpwGS-$R=P9b%nH6ks}Yr%#YP`7n?Xj+axow+6$wd@u8>cDaV64NXh@?uybAgsR(XI~5sk8|y|AlNYhMj!^RS0*A~YtS@5xx%ez9}<@zkJl?_OS!qbgOYuQ`+UCr8TFiBl9g2k@1<9f&$P;eYo6V5BELC66EX|PVUQ29x(z)-a;jAwb>iNjNieEv86cdO>8=&U5FpJ8SBf=b!|Jwc0f9{`Zn-$NI-J{x&lB^))rGMjeGD7TlQ7G+Np_Z2VAO%0du^8iq17=o8Z1~_(o>Z3<|piGS|JrEGQVDsS`&fb*QO=uZN1{>BX&Y<8Jx@ENl1rR(&9cx{wIzSh3V=*WuqScEQ!Q{7~b_XrIiKh1%h4OA$=EWcLF7JAgNq)U<01DMhI2O|9$czSrJvCRX<rFWY(uOQuFBuXWQd_ow00(;7Zi8iOqvkOJTa-|0lR?z|Pe9=sX1Ugtlla3pQCHv9V;*ct_vYj<Un}UMDGTZzz-nk|n8!B5<_Oa}QO#b>7yM7tj2Y=1I^_4CIb(sTb$W`^DKS5$mI~a1~gEhOI+-dRW7D^pe!-c(zn<r~2=%aGEZ%uKMrEpO<|8qQ&s){-q;1x@R*@LNCMxM!a7*&oHU_=rp7E>OqljyJs59MJ`p`??*V#c}y}}Kk(ugMZQoiqvr+31B+9(Y1))oSFSerzYvWlpgcu0jPdYMP$c56)Ocg%5ied=oM`?q1v&WR)0u|?JN~w)Lkfm)g*oPig#!zIrxNEIfNU}&-(cNzf$M#$)+IVQ`hst542>g`+(5aHGv$Smc9>saR*{s+^yry^$$*VcXVecny4&E)?cLsk7>l}7j{r(aNYzc+s|*(XQXw+|(yH}JxkOS#&!RW8;Od(@JU(Fzm|Z9?c>PEI5*ONK1w)|q3PuuVGa7wCf?SpxD^55|vN0=2V0|*5&<7tO<5&S6B_uAlacCBj9)5BdETPu4v=BOoseM^U&E>Exajl5kz?9JA5dfupH3Wu4IbK-bLVvz@H!IWkRRpgwGB*<nPO-W;{VHiH0uj9KFulhp<6x0(srAK}EHKTK7WlZzpGU|zxW@Nd%=zb>iNY*bIF(r?!KPP5xU3g-G;^+r`jgJplO+Fj6}$FMixJ-_3Mi9M`T^8{)+xFyq&8)kpXna*hUnDw{8q-e^7Fh>)pyo@U%NHleFR(sSUJDO4btkwAh{iD53l>1{#_Z+sibjliz#ySqPEAxS&7mviXP_JGt?Sb=1T`jF7#5$1Ax^}iI^2wFDcdCFz6$O^6Y-7Kf$UaDuZct4AQ^-AY?D=eD{qK4<*Zd8C<s;Cd^`;Og2Ayut@eUE0qZwPB{s6F-bOQrphSA13%lNO1itu3g2UUZ-ij>OP|A#OYZa56}Xd!o32r{t8~;!48#GL;t{x;f>rB8hCS+LtEK$WFByB-VY+!4LRA?1{#@2v<rrLtJyR)jil0+`(oYyg_k~LCFWPe`9mQhsN`Zwvc@%l8Rrh-#h!L_1eK#iW{eG;<WC>;M%y(7{+Sdmk_oi@RI;28!!Tc4^4<^AE>X`Snw*m#tr%<~X!375v!BU;gM+6`%WCQLc)Wx2$?SJ^>YF5s_k%3<Fu3j|n$n=yr@jAR}^nP9qkmgRGQ!ame%9~)eFZf!GE`%QN>x-d0j-AuzPn1NI_ZW6Y%62iia5ub0h`b2UyjshuY#l6iOn+}uUBINzkJxX*FKdY2(pD0pgS>-<d~I|}Fh0Z1+?W)q&Nv1%G%DW+Bwbt7&*`(1x6s(TgF1Qhj(|o^OYE4S_NMLQ<6_Aw6vg+&Uj3kdqnSnX0rFUFkkGtW?GQ(+!Q?5zowr_SY#t~BL#{VhCaw9nO&M8ZHcaJ<AJ@{umh>+HZ;2!Q*>58Vq{LC+3KGr|g9@xSq+lEfz3-Qmh<_sifKOpkvF%+$m;cz0RO4O$7!&rgGtXf3YI3MLSGb0b{<=nA;wi+c3%LqUUE<?ErsmQrbJZubKT|O#Fb7-0nIrpi-XXDHB2*Q>R`Q0<0*@A=*l5WKwnubQnoYQ!J_>~EPAz0CG3boC<&P31;%lZ+UBjwDnsU2lQXvsIH}h%o?fR)~<|W_L*ot3LY5DE*6&+SDJd0j=E)eU@!_-zx>0p?LUI`V2QTBNf6bR4k?(7edU&b++$I)s4BJ3}}PBTb(4koODbfnU#V<?C>uNdxUzT7R8W3qSQarxd-8?kbh95<`R#fx4ed{>zS9Ls6{R51ho7vqIc-6@*z%2hNFtQMCF!jCVI=?DNVVEzn_vEJ+VPU2aMq)(i@&-vt6G>D_|UF^k-q3D4R`aUy=V_n^*;>#DK{lck)ATE6U$QG40->mFDh{$pDlR>n(<X8Q;(ESC%{NR5?g|dyWvCc2=K50d|L8cu7+4h_=SAMrL3nq??RFI|+@4BcoXRAj}cs|Zz(FyTFb;L`<Ql1Sc*0brVx&IaIMOL0ZBjyNA`fLf``_x?l{3*zK4PC>1=HNS#pEQnT6(V8&WS+nJXEJ4JQ4uUm0z3pJ2`(Wk4h0nZ2>=PZ*ryopjW5i%#N>WlJwX#4lm>OsNUo@@49M%Ty+(<aZ%kayf;RlqabKV8%hXF+velU7Qt+IYkc$Se$9F`XepT^ps$exC0zem78(dXB9jhGo&~I2W+|H6wl$<S-P#Tf1dPeDNB6d5bL-J+Io?yM$_Q>(Zet+R&*v<h-Rth726EBA4`3Z~n$dn6}&U75`b03fX3<yFoO+58bY0m=6Rz85MGF|ycf!r?hj`1j>a@I;+ip%9y!fu%^e5^D{w5dVC5+RL?Mvr6!c=uERQ67Mr%D7Lp*LRSrRv~wiPIX%bxW@B72T|<?&Kledv8{0o@W^rMcjm0p(;K?a4KHj1XzbX;-<E708h!7o%K}!X9x2=KODfPI>}_akJ(z3IQ~#(=U+Gg*sL_VWl$%YyeR)+AQiLqwgBzBi!6bZ(j3AoYU{8Yetx&p~j}oAe#0wV>@IHDf5=uXK=|%jNbMPm7ZD=avPEgX~6sW&<8Zd?pq*DMCt5J(Yx?q7OeV~4oy8gmiAYDaZcw}_nJu*0}5)0pG*Ich^fWnntMHrZb$cJuuI{tb)3|<>W?_*5Twu7k`FX{Ox0k9xc4>dBS$+cX^UPWr9G*47{=v^C*-XY6Lr^G>49Lr=xoG0MfKANl4C*XuRGnOsu<!Q&4-}Ls=7$mRk$}n|;sX-8=S4(35EmG1ex=fw5&jE78n$TOWxUC5H20Yn500000y`s%+<Y>FL00Eg6hByEKyR6pqvBYQl0ssI200dcD'
 
 if __name__ == "__main__":
     import base64

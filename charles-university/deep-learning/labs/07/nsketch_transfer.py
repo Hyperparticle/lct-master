@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-import nets.nasnet.nasnet
+import nets.resnet.resnet_v2 as resnet
 
 class Dataset:
     def __init__(self, filename, shuffle_batches = True):
@@ -16,7 +16,7 @@ class Dataset:
             len(self._images))
         
         # Normalize images
-        # self._images = (self._images - self._images.mean(axis=0)) / (self._images.std(axis=0))
+        self._images = (self._images - self._images.mean(axis=0)) / (self._images.std(axis=0))
 
     @property
     def images(self):
@@ -69,9 +69,8 @@ class Network:
 
             # Create NASNet
             images = 2 * (tf.tile(tf.image.convert_image_dtype(self.images, tf.float32), [1, 1, 1, 3]) - 0.5)
-            with tf.contrib.slim.arg_scope(nets.nasnet.nasnet.nasnet_large_arg_scope()):
-                features, _ = nets.nasnet.nasnet.build_nasnet_large(images, num_classes=None,
-                                                                     is_training=True)
+            with tf.contrib.slim.arg_scope(resnet.resnet_arg_scope()):
+                features, _ = resnet.resnet_v2_152(images, num_classes=None, is_training=True)
             self.nasnet_saver = tf.train.Saver()
 
             # Computation and training.
@@ -82,7 +81,7 @@ class Network:
             # - label predictions are stored in `self.predictions`
 
             with tf.variable_scope('classify'):
-                x = features
+                x = tf.layers.flatten(features)
 
                 x = tf.layers.dense(x, 1024, activation=tf.nn.swish)
 
@@ -107,7 +106,7 @@ class Network:
                                                                 global_step=global_step)
 
                 gradients, variables = zip(*optimizer.compute_gradients(self.loss, var_list=finetune_vars))
-                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
                 self.train_finetune = optimizer.apply_gradients(zip(gradients, variables),
                                                                 global_step=global_step)
 
@@ -134,7 +133,7 @@ class Network:
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
             # Load NASNet
-            self.nasnet_saver.restore(self.session, args.nasnet)
+            self.nasnet_saver.restore(self.session, args.weights)
 
     def train_batch(self, images, labels, finetune=False):
         if finetune:
@@ -177,14 +176,11 @@ if __name__ == "__main__":
     import os
     import re
 
-    # Fix random seed
-    np.random.seed(42)
-
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
+    parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
-    parser.add_argument("--nasnet", default="nets/nasnet/model.ckpt", type=str, help="NASNet checkpoint path.")
+    parser.add_argument("--weights", default="nets/resnet/resnet_v2_152.ckpt", type=str, help="Checkpoint path.")
     parser.add_argument("--learning_rate", default=0.001)
     parser.add_argument("--shift_fraction", default=0.0)
     parser.add_argument("--load", action='store_true')
@@ -215,17 +211,19 @@ if __name__ == "__main__":
         for i in range(args.epochs):
             print('Epoch', i)
 
-            finetune = i > 2
+            finetune = i > 3
 
             with tqdm(total=len(train.images)) as pbar:
-                batches = train.batches(args.batch_size, args.shift_fraction)
-                steps_per_epoch = len(train.images)
-                total = 0
-                while total < steps_per_epoch:
-                    images, labels = next(batches)
+                # batches = train.batches(args.batch_size, args.shift_fraction)
+                # steps_per_epoch = len(train.images)
+                # total = 0
+                while not train.epoch_finished():
+                # while total < steps_per_epoch:
+                    # images, labels = next(batches)
+                    images, labels = train.next_batch(args.batch_size)
                     network.train_batch(images, labels, finetune=finetune)
                     pbar.update(len(images))
-                    total += len(images)
+                    # total += len(images)
 
             accuracy = network.evaluate("dev", dev, args.batch_size)
             print('Val accuracy', accuracy)

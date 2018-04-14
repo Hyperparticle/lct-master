@@ -71,7 +71,7 @@ class Network:
             # If args.hidden_layer, add a dense layer with `args.hidden_layer` neurons
             # and ReLU activation.
             if args.hidden_layer:
-                hidden_layer = tf.layers.dense(hidden_layer, args.hiddeen_layer, activation=tf.nn.relu)
+                hidden_layer = tf.layers.dense(hidden_layer, args.hidden_layer, activation=tf.nn.relu)
 
             # Add a dense layer with one output neuron, without activation, into `output_layer`
             output_layer = tf.layers.dense(hidden_layer, 1)

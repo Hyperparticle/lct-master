@@ -66,23 +66,23 @@ class Network:
 
             # Process self.sequences using `tf.nn.dynamic_rnn` and `rnn_cell`,
             # store the outputs to `hidden_layer` and ignore output states.
-            x, _ = tf.nn.dynamic_rnn(rnn_cell, self.sequences, dtype=tf.float32)
+            hidden_layer, _ = tf.nn.dynamic_rnn(rnn_cell, self.sequences, dtype=tf.float32)
 
             # If args.hidden_layer, add a dense layer with `args.hidden_layer` neurons
             # and ReLU activation.
             if args.hidden_layer:
-                x = tf.layers.dense(x, args.hiddeen_layer, activation=tf.nn.relu)
+                hidden_layer = tf.layers.dense(hidden_layer, args.hiddeen_layer, activation=tf.nn.relu)
 
             # Add a dense layer with one output neuron, without activation, into `output_layer`
-            x = tf.layers.dense(x, 1)
+            output_layer = tf.layers.dense(hidden_layer, 1)
 
             # Remove the third dimension from `output_layer` using `tf.squeeze`.
-            output_layer = tf.squeeze(x)
+            output_layer = tf.squeeze(output_layer)
 
             # Generate self.predictions with either False/True according to whether
             # values in `output_layer` are less or grater than 0 (using `tf.greater_equal`).
             # This corresponds to rounding the probability of sigmoid applied to `output_layer`.
-            self.predictions = tf.cast(tf.round(tf.sigmoid(output_layer)), tf.bool)
+            self.predictions = tf.greater_equal(output_layer, 0.0)
 
             # Training
             loss = tf.losses.sigmoid_cross_entropy(tf.cast(self.labels, tf.int32), output_layer)

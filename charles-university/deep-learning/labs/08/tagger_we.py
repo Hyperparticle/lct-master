@@ -129,8 +129,8 @@ if __name__ == "__main__":
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
-    train = morpho_dataset.MorphoDataset("czech-cac/czech-cac-train.txt", max_sentences=5000)
-    dev = morpho_dataset.MorphoDataset("czech-cac/czech-cac-dev.txt", train=train, shuffle_batches=False)
+    train = morpho_dataset.MorphoDataset("czech-cac-train.txt", max_sentences=5000)
+    dev = morpho_dataset.MorphoDataset("czech-cac-dev.txt", train=train, shuffle_batches=False)
 
     # Construct the network
     network = Network(threads=args.threads)

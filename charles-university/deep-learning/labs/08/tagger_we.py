@@ -22,29 +22,42 @@ class Network:
             self.word_ids = tf.placeholder(tf.int32, [None, None], name="word_ids")
             self.tags = tf.placeholder(tf.int32, [None, None], name="tags")
 
-            # TODO: Choose RNN cell class according to args.rnn_cell (LSTM and GRU
+            # Choose RNN cell class according to args.rnn_cell (LSTM and GRU
             # should be supported, using tf.nn.rnn_cell.{BasicLSTM,GRU}Cell).
+            rnn_cell = tf.nn.rnn_cell.BasicLSTMCell if args.rnn_cell == "LSTM" else tf.nn.rnn_cell.GRUCell
 
-            # TODO: Create word embeddings for num_words of dimensionality args.we_dim.
+            # Create word embeddings for num_words of dimensionality args.we_dim.
+            word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
 
-            # TODO: Embed self.word_ids using the word embeddings.
+            # Embed self.word_ids using the word embeddings.
+            embedded_word_ids = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
 
-            # TODO: Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
+            # Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
             # Use given rnn_cell (different for fwd and bwd direction).
+            fwd = rnn_cell(args.rnn_cell_dim)
+            bwd = rnn_cell(args.rnn_cell_dim)
+            outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, embedded_word_ids,
+                                                          sequence_length=self.sentence_lens,
+                                                          dtype=tf.float32)
 
-            # TODO: Concatenate the outputs for fwd and bwd directions.
+            # Concatenate the outputs for fwd and bwd directions.
+            hidden_layer = tf.concat(outputs, axis=-1)
 
-            # TODO: Add a dense layer (without activation) into num_tags classes and
+            # Add a dense layer (without activation) into num_tags classes and
             # store result in `output_layer`.
+            output_layer = tf.layers.dense(hidden_layer, num_tags)
 
-            # TODO: Generate `self.predictions`.
+            # Generate `self.predictions`.
+            self.predictions = tf.argmax(output_layer, axis=-1)
 
-            # TODO: Generate `weights` as a 1./0. mask of valid/invalid words (using `tf.sequence_mask`).
+            # Generate `weights` as a 1./0. mask of valid/invalid words (using `tf.sequence_mask`).
+            weights = tf.sequence_mask(self.sentence_lens, dtype=tf.float32)
 
             # Training
 
-            # TODO: Define `loss` using `tf.losses.sparse_softmax_cross_entropy`, but additionally
+            # Define `loss` using `tf.losses.sparse_softmax_cross_entropy`, but additionally
             # use `weights` parameter to mask-out invalid words.
+            loss = tf.losses.sparse_softmax_cross_entropy(self.tags, output_layer, weights=weights)
 
             global_step = tf.train.create_global_step()
             self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
@@ -116,8 +129,8 @@ if __name__ == "__main__":
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
-    train = morpho_dataset.MorphoDataset("czech-cac-train.txt", max_sentences=5000)
-    dev = morpho_dataset.MorphoDataset("czech-cac-dev.txt", train=train, shuffle_batches=False)
+    train = morpho_dataset.MorphoDataset("czech-cac/czech-cac-train.txt", max_sentences=5000)
+    dev = morpho_dataset.MorphoDataset("czech-cac/czech-cac-dev.txt", train=train, shuffle_batches=False)
 
     # Construct the network
     network = Network(threads=args.threads)

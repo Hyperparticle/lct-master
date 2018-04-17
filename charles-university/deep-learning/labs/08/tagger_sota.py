@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm, tnrange
 
 import morpho_dataset
 
 class Network:
-    def __init__(self, threads, seed=42):
+    def __init__(self):
         # Create an empty graph and a session
         graph = tf.Graph()
-        graph.seed = seed
-        self.session = tf.Session(graph = graph, config=tf.ConfigProto(inter_op_parallelism_threads=threads,
-                                                                       intra_op_parallelism_threads=threads))
+        self.session = tf.Session(graph=graph)
 
     def construct(self, args, num_words, num_chars, num_tags):
         with self.session.graph.as_default():
-            if args.recodex:
-                tf.get_variable_scope().set_initializer(tf.glorot_uniform_initializer(seed=42))
-
             # Inputs
             self.sentence_lens = tf.placeholder(tf.int32, [None], name="sentence_lens")
             self.word_ids = tf.placeholder(tf.int32, [None, None], name="word_ids")
@@ -91,7 +87,7 @@ class Network:
             loss = tf.losses.sparse_softmax_cross_entropy(self.tags, output_layer, weights=weights)
 
             global_step = tf.train.create_global_step()
-            self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
+            self.training = tf.train.AdamOptimizer(args.learning_rate).minimize(loss, global_step=global_step, name="training")
 
             # Summaries
             self.current_accuracy, self.update_accuracy = tf.metrics.accuracy(self.tags, self.predictions, weights=weights)
@@ -114,14 +110,16 @@ class Network:
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def train_epoch(self, train, batch_size):
-        while not train.epoch_finished():
-            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = train.next_batch(batch_size, including_charseqs=True)
-            self.session.run(self.reset_metrics)
-            self.session.run([self.training, self.summaries["train"]],
-                             {self.sentence_lens: sentence_lens,
-                              self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
-                              self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
-                              self.tags: word_ids[train.TAGS]})
+        with tqdm(total=len(train.sentence_lens)) as pbar:
+            while not train.epoch_finished():
+                sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = train.next_batch(batch_size, including_charseqs=True)
+                self.session.run(self.reset_metrics)
+                self.session.run([self.training, self.summaries["train"]],
+                                 {self.sentence_lens: sentence_lens,
+                                  self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
+                                  self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
+                                  self.tags: word_ids[train.TAGS]})
+                pbar.update(len(sentence_lens))
 
     def evaluate(self, dataset_name, dataset, batch_size):
         self.session.run(self.reset_metrics)
@@ -141,21 +139,17 @@ if __name__ == "__main__":
     import os
     import re
 
-    # Fix random seed
-    np.random.seed(42)
-
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=10, type=int, help="Batch size.")
-    parser.add_argument("--cle_dim", default=32, type=int, help="Character-level embedding dimension.")
-    parser.add_argument("--cnne_filters", default=16, type=int, help="CNN embedding filters per length.")
-    parser.add_argument("--cnne_max", default=4, type=int, help="Maximum CNN filter length.")
-    parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
-    parser.add_argument("--recodex", default=False, action="store_true", help="ReCodEx mode.")
+    parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
+    parser.add_argument("--learning_rate", default=0.001)
+    parser.add_argument("--cle_dim", default=40, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--cnne_filters", default=32, type=int, help="CNN embedding filters per length.")
+    parser.add_argument("--cnne_max", default=8, type=int, help="Maximum CNN filter length.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
-    parser.add_argument("--rnn_cell_dim", default=64, type=int, help="RNN cell dimension.")
-    parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--we_dim", default=64, type=int, help="Word embedding dimension.")
+    parser.add_argument("--rnn_cell_dim", default=128, type=int, help="RNN cell dimension.")
+    parser.add_argument("--we_dim", default=128, type=int, help="Word embedding dimension.")
     args = parser.parse_args()
 
     # Create logdir name
@@ -167,16 +161,17 @@ if __name__ == "__main__":
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
-    train = morpho_dataset.MorphoDataset("czech-cac-train.txt", max_sentences=5000)
-    dev = morpho_dataset.MorphoDataset("czech-cac-dev.txt", train=train, shuffle_batches=False)
+    train = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-train.txt", max_sentences=5000)
+    dev = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-dev.txt", train=train, shuffle_batches=False)
 
     # Construct the network
-    network = Network(threads=args.threads)
+    network = Network()
     network.construct(args, len(train.factors[train.FORMS].words), len(train.factors[train.FORMS].alphabet),
                       len(train.factors[train.TAGS].words))
 
     # Train
     for i in range(args.epochs):
+        print('Epoch', i)
         network.train_epoch(train, args.batch_size)
 
         accuracy = network.evaluate("dev", dev, args.batch_size)

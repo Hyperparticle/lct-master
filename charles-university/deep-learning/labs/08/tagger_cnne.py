@@ -37,27 +37,38 @@ class Network:
 
             # Convolutional word embeddings (CNNE)
 
-            # TODO: Generate character embeddings for num_chars of dimensionality args.cle_dim.
+            # Generate character embeddings for num_chars of dimensionality args.cle_dim.
+            charseq_embeddings = tf.get_variable("charseq_embeddings", [num_chars, args.cle_dim])
 
-            # TODO: Embed self.charseqs using the character embeddings.
+            # Embed self.charseqs using the character embeddings.
+            embedded_charseqs = tf.nn.embedding_lookup(charseq_embeddings, self.charseqs)
 
-            # TODO: For kernel sizes of {2..args.cnne_max}, do the following:
+            # For kernel sizes of {2..args.cnne_max}, do the following:
             # - use `tf.layers.conv1d` on input embedded characters, with given kernel size
             #   and `args.cnne_filters`; use `VALID` padding, stride 1 and no activation.
-            # - perform chanel-wise max-pooling over the whole word, generating output
+            # - perform channel-wise max-pooling over the whole word, generating output
             #   of size `args.cnne_filters` for every word.
+            features = []
+            for kernel_size in range(2, args.cnne_max + 1):
+                conv = tf.layers.conv1d(embedded_charseqs, args.cnne_filters, kernel_size, strides=1, padding='valid')
+                # pool = tf.layers.max_pooling1d(conv, args.cnne_filters, strides=1)
+                pool = tf.reduce_max(conv, reduction_indices=[1])
+                features.append(pool)
 
-            # TODO: Concatenate the computed features (in the order of kernel sizes 2..args.cnne_max).
+            # Concatenate the computed features (in the order of kernel sizes 2..args.cnne_max).
             # Consequently, each word is represented using convolutional embedding (CNNE) of size
             # `(args.cnne_max-1)*args.cnne_filters`.
+            embedded_cnne = tf.concat(features, axis=-1)
 
-            # TODO: Concatenate the word embeddings (computed above) and the CNNE (in this order).
+            # Concatenate the word embeddings (computed above) and the CNNE (in this order).
+            embedded_charseq_ids = tf.nn.embedding_lookup(embedded_cnne, self.charseq_ids)
+            word_cnne = tf.concat([embedded_word_ids, embedded_charseq_ids], axis=-1)
 
             # (we): Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
             # Use given rnn_cell (different for fwd and bwd direction).
             fwd = rnn_cell(args.rnn_cell_dim)
             bwd = rnn_cell(args.rnn_cell_dim)
-            outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, embedded_word_ids,
+            outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, word_cnne,
                                                           sequence_length=self.sentence_lens,
                                                           dtype=tf.float32)
 
@@ -137,6 +148,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=10, type=int, help="Batch size.")
+    parser.add_argument("--cle_dim", default=32, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--cnne_filters", default=16, type=int, help="CNN embedding filters per length.")
     parser.add_argument("--cnne_max", default=4, type=int, help="Maximum CNN filter length.")
     parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")

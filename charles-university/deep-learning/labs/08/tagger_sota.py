@@ -21,10 +21,6 @@ class Network:
             self.charseq_ids = tf.placeholder(tf.int32, [None, None], name="charseq_ids")
             self.tags = tf.placeholder(tf.int32, [None, None], name="tags")
 
-            # (we): Choose RNN cell class according to args.rnn_cell (LSTM and GRU
-            # should be supported, using tf.nn.rnn_cell.{BasicLSTM,GRU}Cell).
-            rnn_cell = tf.nn.rnn_cell.BasicLSTMCell if args.rnn_cell == "LSTM" else tf.nn.rnn_cell.GRUCell
-
             # (we): Create word embeddings for num_words of dimensionality args.we_dim.
             word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
 
@@ -39,33 +35,51 @@ class Network:
             # Embed self.charseqs using the character embeddings.
             embedded_charseqs = tf.nn.embedding_lookup(charseq_embeddings, self.charseqs)
 
-            # For kernel sizes of {2..args.cnne_max}, do the following:
-            # - use `tf.layers.conv1d` on input embedded characters, with given kernel size
-            #   and `args.cnne_filters`; use `VALID` padding, stride 1 and no activation.
-            # - perform channel-wise max-pooling over the whole word, generating output
-            #   of size `args.cnne_filters` for every word.
-            features = []
-            for kernel_size in range(2, args.cnne_max + 1):
-                conv = tf.layers.conv1d(embedded_charseqs, args.cnne_filters, kernel_size, strides=1, padding='valid')
-                pool = tf.reduce_max(conv, axis=1)
-                features.append(pool)
+            # # For kernel sizes of {2..args.cnne_max}, do the following:
+            # # - use `tf.layers.conv1d` on input embedded characters, with given kernel size
+            # #   and `args.cnne_filters`; use `VALID` padding, stride 1 and no activation.
+            # # - perform channel-wise max-pooling over the whole word, generating output
+            # #   of size `args.cnne_filters` for every word.
+            # features = []
+            # for kernel_size in range(2, args.cnne_max + 1):
+            #     conv = tf.layers.conv1d(embedded_charseqs, args.cnne_filters, kernel_size, strides=1, padding='valid')
+            #     pool = tf.reduce_max(conv, axis=1)
+            #     features.append(pool)
+            #
+            # # Concatenate the computed features (in the order of kernel sizes 2..args.cnne_max).
+            # # Consequently, each word is represented using convolutional embedding (CNNE) of size
+            # # `(args.cnne_max-1)*args.cnne_filters`.
+            # embedded_cnne = tf.concat(features, axis=-1)
+            #
+            # # Concatenate the word embeddings (computed above) and the CNNE (in this order).
+            # embedded_charseq_ids_cnne = tf.nn.embedding_lookup(embedded_cnne, self.charseq_ids)
 
-            # Concatenate the computed features (in the order of kernel sizes 2..args.cnne_max).
-            # Consequently, each word is represented using convolutional embedding (CNNE) of size
-            # `(args.cnne_max-1)*args.cnne_filters`.
-            embedded_cnne = tf.concat(features, axis=-1)
+            # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs using
+            # a GRU cell of dimensionality `args.cle_dim`.
+            fwd_cle = tf.nn.rnn_cell.GRUCell(args.rnn_cell_dim)
+            bwd_cle = tf.nn.rnn_cell.GRUCell(args.rnn_cell_dim)
+            charseq_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd_cle, bwd_cle, embedded_charseqs,
+                                                                  sequence_length=self.charseq_lens,
+                                                                  dtype=tf.float32,
+                                                                  scope='CharBiRNN')
 
-            # Concatenate the word embeddings (computed above) and the CNNE (in this order).
-            embedded_charseq_ids = tf.nn.embedding_lookup(embedded_cnne, self.charseq_ids)
-            word_cnne = tf.concat([embedded_word_ids, embedded_charseq_ids], axis=-1)
+            # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE).
+            fwd_bwd = tf.concat(charseq_outputs, axis=-1)
+            cle_table = tf.reduce_sum(fwd_bwd, axis=1)
+
+            # For each word, use suitable CLE according to self.charseq_ids.
+            embedded_charseq_ids_cle = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
+
+            word_cnne = tf.concat([embedded_word_ids, embedded_charseq_ids_cle], axis=-1)
 
             # (we): Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
             # Use given rnn_cell (different for fwd and bwd direction).
-            fwd = rnn_cell(args.rnn_cell_dim)
-            bwd = rnn_cell(args.rnn_cell_dim)
+            fwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
+            bwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
             outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, word_cnne,
                                                           sequence_length=self.sentence_lens,
-                                                          dtype=tf.float32)
+                                                          dtype=tf.float32,
+                                                          scope='WordBiRNN')
 
             # (we): Concatenate the outputs for fwd and bwd directions.
             hidden_layer = tf.concat(outputs, axis=-1)
@@ -144,12 +158,11 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
     parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--cle_dim", default=40, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--cnne_filters", default=32, type=int, help="CNN embedding filters per length.")
     parser.add_argument("--cnne_max", default=8, type=int, help="Maximum CNN filter length.")
-    parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
-    parser.add_argument("--rnn_cell_dim", default=128, type=int, help="RNN cell dimension.")
-    parser.add_argument("--we_dim", default=128, type=int, help="Word embedding dimension.")
+    parser.add_argument("--rnn_cell_dim", default=512, type=int, help="RNN cell dimension.")
+    parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--we_dim", default=256, type=int, help="Word embedding dimension.")
     args = parser.parse_args()
 
     # Create logdir name

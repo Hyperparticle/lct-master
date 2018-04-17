@@ -5,6 +5,15 @@ from tqdm import tqdm, tnrange
 
 import morpho_dataset
 
+
+def dense_to_sparse(dense_tensor, sequence_length):
+    # https://github.com/tensorflow/tensorflow/issues/15985
+    indices = tf.where(tf.sequence_mask(sequence_length))
+    values = tf.gather_nd(dense_tensor, indices)
+    shape = tf.shape(dense_tensor, out_type=tf.int64)
+    return tf.SparseTensor(indices, values, shape)
+
+
 class Network:
     def __init__(self):
         # Create an empty graph and a session
@@ -21,87 +30,79 @@ class Network:
             self.charseq_ids = tf.placeholder(tf.int32, [None, None], name="charseq_ids")
             self.tags = tf.placeholder(tf.int32, [None, None], name="tags")
 
-            # (we): Create word embeddings for num_words of dimensionality args.we_dim.
-            word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
-
-            # (we): Embed self.word_ids using the word embeddings.
-            embedded_word_ids = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
-
-            # Convolutional word embeddings (CNNE)
-
             # Generate character embeddings for num_chars of dimensionality args.cle_dim.
-            charseq_embeddings = tf.get_variable("charseq_embeddings", [num_chars, args.cle_dim])
+            char_embeddings = tf.get_variable("char_embeddings", [num_chars, args.cle_dim])
 
             # Embed self.charseqs using the character embeddings.
-            embedded_charseqs = tf.nn.embedding_lookup(charseq_embeddings, self.charseqs)
-
-            # # For kernel sizes of {2..args.cnne_max}, do the following:
-            # # - use `tf.layers.conv1d` on input embedded characters, with given kernel size
-            # #   and `args.cnne_filters`; use `VALID` padding, stride 1 and no activation.
-            # # - perform channel-wise max-pooling over the whole word, generating output
-            # #   of size `args.cnne_filters` for every word.
-            # features = []
-            # for kernel_size in range(2, args.cnne_max + 1):
-            #     conv = tf.layers.conv1d(embedded_charseqs, args.cnne_filters, kernel_size, strides=1, padding='valid')
-            #     pool = tf.reduce_max(conv, axis=1)
-            #     features.append(pool)
-            #
-            # # Concatenate the computed features (in the order of kernel sizes 2..args.cnne_max).
-            # # Consequently, each word is represented using convolutional embedding (CNNE) of size
-            # # `(args.cnne_max-1)*args.cnne_filters`.
-            # embedded_cnne = tf.concat(features, axis=-1)
-            #
-            # # Concatenate the word embeddings (computed above) and the CNNE (in this order).
-            # embedded_charseq_ids_cnne = tf.nn.embedding_lookup(embedded_cnne, self.charseq_ids)
+            # [batch, sentence, word, char embed dim]
+            embedded_chars = tf.nn.embedding_lookup(char_embeddings, self.charseqs)
 
             # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs using
-            # a GRU cell of dimensionality `args.cle_dim`.
-            fwd_cle = tf.nn.rnn_cell.GRUCell(args.rnn_cell_dim)
-            bwd_cle = tf.nn.rnn_cell.GRUCell(args.rnn_cell_dim)
-            charseq_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd_cle, bwd_cle, embedded_charseqs,
-                                                                  sequence_length=self.charseq_lens,
-                                                                  dtype=tf.float32,
-                                                                  scope='CharBiRNN')
+            # a cell of dimensionality `args.cle_dim`.
+            fwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
+            bwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
+            char_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd_cle, bwd_cle, embedded_chars,
+                                                               sequence_length=self.charseq_lens,
+                                                               dtype=tf.float32,
+                                                               scope='CharBiRNN')
 
             # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE).
-            fwd_bwd = tf.concat(charseq_outputs, axis=-1)
+            fwd_bwd = tf.concat(char_outputs, axis=-1)
             cle_table = tf.reduce_sum(fwd_bwd, axis=1)
 
             # For each word, use suitable CLE according to self.charseq_ids.
-            embedded_charseq_ids_cle = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
+            embedded_char_ids = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
 
-            word_cnne = tf.concat([embedded_word_ids, embedded_charseq_ids_cle], axis=-1)
+            # Create word embeddings for num_words of dimensionality args.we_dim.
+            word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
 
-            # (we): Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
+            # Embed self.word_ids using the word embeddings.
+            embedded_word_ids = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
+
+            total_word_embeddings = tf.concat([embedded_word_ids, embedded_char_ids], axis=-1)
+
+            # Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
             # Use given rnn_cell (different for fwd and bwd direction).
             fwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
             bwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
-            outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, word_cnne,
+            outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, total_word_embeddings,
                                                           sequence_length=self.sentence_lens,
                                                           dtype=tf.float32,
                                                           scope='WordBiRNN')
 
-            # (we): Concatenate the outputs for fwd and bwd directions.
-            hidden_layer = tf.concat(outputs, axis=-1)
+            # Concatenate the outputs for fwd and bwd directions.
+            rnn_outputs = tf.concat(outputs, axis=-1)
 
-            # (we): Add a dense layer (without activation) into num_tags classes and
+            # Add a dense layer (without activation) into num_tags classes and
             # store result in `output_layer`.
-            output_layer = tf.layers.dense(hidden_layer, num_tags)
+            output_layer = tf.layers.dense(rnn_outputs, num_tags)
 
-            # (we): Generate `self.predictions`.
+            # log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(output_layer,
+            #                                                                       self.tags,
+            #                                                                       self.sentence_lens)
+            # loss = tf.reduce_mean(-log_likelihood)
+            #
+            # viterbi_sequence, viterbi_score = tf.contrib.crf.crf_decode(output_layer,
+            #                                                             transition_params,
+            #                                                             self.sentence_lens)
+            #
+            # self.predictions = viterbi_sequence
+
+            # Generate `self.predictions`.
             self.predictions = tf.argmax(output_layer, axis=-1)
 
-            # (we): Generate `weights` as a 1./0. mask of valid/invalid words (using `tf.sequence_mask`).
+            # Generate `weights` as a 1./0. mask of valid/invalid words (using `tf.sequence_mask`).
             weights = tf.sequence_mask(self.sentence_lens, dtype=tf.float32)
 
             # Training
 
-            # (we): Define `loss` using `tf.losses.sparse_softmax_cross_entropy`, but additionally
+            # Define `loss` using `tf.losses.sparse_softmax_cross_entropy`, but additionally
             # use `weights` parameter to mask-out invalid words.
             loss = tf.losses.sparse_softmax_cross_entropy(self.tags, output_layer, weights=weights)
 
             global_step = tf.train.create_global_step()
-            self.training = tf.train.AdamOptimizer(args.learning_rate).minimize(loss, global_step=global_step, name="training")
+            optimizer = tf.train.AdamOptimizer(args.learning_rate)
+            self.training = optimizer.minimize(loss, global_step=global_step, name="training")
 
             # Summaries
             self.current_accuracy, self.update_accuracy = tf.metrics.accuracy(self.tags, self.predictions, weights=weights)
@@ -117,6 +118,9 @@ class Network:
                 for dataset in ["dev", "test"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", self.current_loss),
                                                tf.contrib.summary.scalar(dataset + "/accuracy", self.current_accuracy)]
+
+            # Construct the saver
+            self.saver = tf.train.Saver()
 
             # Initialize variables
             self.session.run(tf.global_variables_initializer())
@@ -146,6 +150,26 @@ class Network:
                               self.tags: word_ids[train.TAGS]})
         return self.session.run([self.current_accuracy, self.summaries[dataset_name]])[0]
 
+    def predict(self, dataset, batch_size):
+        self.session.run(self.reset_metrics)
+        labels = []
+        while not dataset.epoch_finished():
+            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size,
+                                                                                              including_charseqs=True)
+            predictions = self.session.run([self.predictions],
+                             {self.sentence_lens: sentence_lens,
+                              self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
+                              self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
+                              self.tags: word_ids[train.TAGS]})
+            labels.append(predictions)
+        return labels
+
+    def save(self, path):
+        self.saver.save(self.session, path)
+
+    def load(self, path):
+        self.saver.restore(self.session, path)
+
 
 if __name__ == "__main__":
     import argparse
@@ -163,6 +187,7 @@ if __name__ == "__main__":
     parser.add_argument("--rnn_cell_dim", default=512, type=int, help="RNN cell dimension.")
     parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--we_dim", default=256, type=int, help="Word embedding dimension.")
+    parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 
     # Create logdir name
@@ -174,18 +199,37 @@ if __name__ == "__main__":
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
-    train = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-train.txt", max_sentences=5000)
+    train = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-train.txt")
     dev = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-dev.txt", train=train, shuffle_batches=False)
+    test = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-test.txt", train=train, shuffle_batches=False)
 
     # Construct the network
     network = Network()
     network.construct(args, len(train.factors[train.FORMS].words), len(train.factors[train.FORMS].alphabet),
                       len(train.factors[train.TAGS].words))
 
-    # Train
-    for i in range(args.epochs):
-        print('Epoch', i)
-        network.train_epoch(train, args.batch_size)
+    if not args.load:
+        best_accuracy = 0
 
-        accuracy = network.evaluate("dev", dev, args.batch_size)
-        print("{:.2f}".format(100 * accuracy))
+        # Train
+        for i in range(args.epochs):
+            print('Epoch', i)
+            network.train_epoch(train, args.batch_size)
+
+            accuracy = network.evaluate("dev", dev, args.batch_size)
+            print("{:.2f}".format(100 * accuracy))
+
+            if accuracy > best_accuracy:
+                print('^^ New best ^^')
+                best_accuracy = accuracy
+                network.save('czech-pdt/model')
+
+    network.load('czech-pdt/model')
+    accuracy = network.evaluate("dev", dev, args.batch_size)
+    print('Final accuracy', accuracy)
+
+    # Predict test data
+    with open("czech_pdt_test.txt", "w") as test_file:
+        labels = network.predict(test, args.batch_size)
+        for label in labels:
+            print(label, file=test_file)

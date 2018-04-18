@@ -1,0 +1,48 @@
+Physical Activity Dataset
+http://archive.ics.uci.edu/ml/datasets/PAMAP2+Physical+Activity+Monitoring
+
+For the purposes of the class NPFL104 Exercises in Machine Learning, we select
+only a subset of the values.
+
+The columns in the files are:
+
+1. personID (1..9), should not be known to the classifier by it *has* a strong
+   incluence on other observed numbers
+2. heart rate
+3. temperature at hand
+4. temperature at chest
+5. temperature at ankle
+6. the predicted activity ID
+
+Files:
+
+all.gz ... all the observations, tab-delimited
+
+Subsections for ML:
+  - always contain a train and a test file
+  - activity 0 (transient) removed
+easy.*.gz         ... x: HR, y: THAND, only person 1
+impossible.*.gz   ... x: HR, y: THAND, all people
+hard.*.gz         ... x: TCHEST, y: TANKLE, all people
+
+Activity IDs:
+1 lying
+2 sitting
+3 standing
+4 walking
+5 running
+6 cycling
+7 Nordic walking
+9 watching TV
+10 computer work
+11 car driving
+12 ascending stairs
+13 descending stairs
+16 vacuum cleaning
+17 ironing
+18 folding laundry
+19 house cleaning
+20 playing soccer
+24 rope jumping
+0 other (transient activities)
+

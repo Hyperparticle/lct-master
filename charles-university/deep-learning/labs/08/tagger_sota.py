@@ -14,11 +14,25 @@ def dense_to_sparse(dense_tensor, sequence_length):
     return tf.SparseTensor(indices, values, shape)
 
 
+def learning_rate_scheduler(epoch):
+    if epoch < 3:
+        return 0.001
+    elif epoch < 4:
+        return 0.0005
+    elif epoch < 5:
+        return 0.00025
+    elif epoch < 6:
+        return 1e-4
+    else:
+        return 1e-5
+
+
 class Network:
     def __init__(self):
         # Create an empty graph and a session
         graph = tf.Graph()
-        self.session = tf.Session(graph=graph)
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
+        self.session = tf.Session(graph=graph, config=tf.ConfigProto(gpu_options=gpu_options))
 
     def construct(self, args, num_words, num_chars, num_tags):
         with self.session.graph.as_default():
@@ -29,6 +43,7 @@ class Network:
             self.charseq_lens = tf.placeholder(tf.int32, [None], name="charseq_lens")
             self.charseq_ids = tf.placeholder(tf.int32, [None, None], name="charseq_ids")
             self.tags = tf.placeholder(tf.int32, [None, None], name="tags")
+            self.learning_rate = tf.placeholder_with_default(0.001, [], name="learning_rate")
 
             # Generate character embeddings for num_chars of dimensionality args.cle_dim.
             char_embeddings = tf.get_variable("char_embeddings", [num_chars, args.cle_dim])
@@ -101,8 +116,19 @@ class Network:
             loss = tf.losses.sparse_softmax_cross_entropy(self.tags, output_layer, weights=weights)
 
             global_step = tf.train.create_global_step()
-            optimizer = tf.train.AdamOptimizer(args.learning_rate)
-            self.training = optimizer.minimize(loss, global_step=global_step, name="training")
+            # decay_steps = args.train_size // args.batch_size
+            # decay_rate = (args.learning_rate_final / args.learning_rate) ** (1 / (args.epochs - 1))
+            # learning_rate = tf.train.exponential_decay(args.learning_rate, global_step, decay_steps, decay_rate,
+            #                                            staircase=True)
+
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                optimizer = tf.train.AdamOptimizer(self.learning_rate)
+
+                # Apply gradient clipping
+                gradients, variables = zip(*optimizer.compute_gradients(loss))
+                gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+                self.training = optimizer.apply_gradients(zip(gradients, variables), global_step=global_step)
 
             # Summaries
             self.current_accuracy, self.update_accuracy = tf.metrics.accuracy(self.tags, self.predictions, weights=weights)
@@ -113,7 +139,8 @@ class Network:
             self.summaries = {}
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(10):
                 self.summaries["train"] = [tf.contrib.summary.scalar("train/loss", self.update_loss),
-                                           tf.contrib.summary.scalar("train/accuracy", self.update_accuracy)]
+                                           tf.contrib.summary.scalar("train/accuracy", self.update_accuracy),
+                                           tf.contrib.summary.scalar("train/learning_rate", self.learning_rate)]
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
                 for dataset in ["dev", "test"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", self.current_loss),
@@ -127,8 +154,11 @@ class Network:
             with summary_writer.as_default():
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
-    def train_epoch(self, train, batch_size):
+    def train_epoch(self, train, dev, batch_size, learning_rate):
+        global best_accuracy
+
         with tqdm(total=len(train.sentence_lens)) as pbar:
+            step = 1
             while not train.epoch_finished():
                 sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = train.next_batch(batch_size, including_charseqs=True)
                 self.session.run(self.reset_metrics)
@@ -136,8 +166,21 @@ class Network:
                                  {self.sentence_lens: sentence_lens,
                                   self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
                                   self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
-                                  self.tags: word_ids[train.TAGS]})
+                                  self.tags: word_ids[train.TAGS],
+                                  self.learning_rate: learning_rate})
                 pbar.update(len(sentence_lens))
+
+                if step % 500 == 0:
+                    accuracy = network.evaluate("dev", dev, args.batch_size)
+
+                    print("{:.2f}".format(100 * accuracy))
+
+                    if accuracy > best_accuracy:
+                        print('^^ New best ^^')
+                        best_accuracy = accuracy
+                        network.save('sota/model')
+
+                step += 1
 
     def evaluate(self, dataset_name, dataset, batch_size):
         self.session.run(self.reset_metrics)
@@ -181,9 +224,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
-    parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--cnne_filters", default=32, type=int, help="CNN embedding filters per length.")
-    parser.add_argument("--cnne_max", default=8, type=int, help="Maximum CNN filter length.")
+    # parser.add_argument("--learning_rate", default=0.01)
+    # parser.add_argument("--learning_rate_final", default=0.0005)
     parser.add_argument("--rnn_cell_dim", default=512, type=int, help="RNN cell dimension.")
     parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--we_dim", default=256, type=int, help="Word embedding dimension.")
@@ -214,17 +256,18 @@ if __name__ == "__main__":
         # Train
         for i in range(args.epochs):
             print('Epoch', i)
-            network.train_epoch(train, args.batch_size)
+            network.train_epoch(train, dev, args.batch_size, learning_rate_scheduler(i))
 
             accuracy = network.evaluate("dev", dev, args.batch_size)
+
             print("{:.2f}".format(100 * accuracy))
 
             if accuracy > best_accuracy:
                 print('^^ New best ^^')
                 best_accuracy = accuracy
-                network.save('czech-pdt/model')
+                network.save('sota/model')
 
-    network.load('czech-pdt/model')
+    network.load('sota/model')
     accuracy = network.evaluate("dev", dev, args.batch_size)
     print('Final accuracy', accuracy)
 

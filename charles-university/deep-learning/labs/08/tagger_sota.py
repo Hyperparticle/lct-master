@@ -16,15 +16,17 @@ def dense_to_sparse(dense_tensor, sequence_length):
 
 def learning_rate_scheduler(epoch):
     if epoch < 3:
-        return 0.001
+        return 1e-3
     elif epoch < 4:
-        return 0.0005
+        return 5e-4
     elif epoch < 5:
-        return 0.00025
+        return 2.5e-4
     elif epoch < 6:
         return 1e-4
-    else:
+    elif epoch < 7:
         return 1e-5
+    else:
+        return 1e-6
 
 
 class Network:
@@ -224,11 +226,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
-    # parser.add_argument("--learning_rate", default=0.01)
-    # parser.add_argument("--learning_rate_final", default=0.0005)
-    parser.add_argument("--rnn_cell_dim", default=512, type=int, help="RNN cell dimension.")
-    parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
-    parser.add_argument("--we_dim", default=256, type=int, help="Word embedding dimension.")
+    parser.add_argument("--rnn_cell_dim", default=1024, type=int, help="RNN cell dimension.")
+    parser.add_argument("--cle_dim", default=512, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 

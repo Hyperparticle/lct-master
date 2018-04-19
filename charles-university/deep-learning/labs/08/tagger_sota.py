@@ -6,35 +6,15 @@ from tqdm import tqdm, tnrange
 import morpho_dataset
 
 
-def dense_to_sparse(dense_tensor, sequence_length):
-    # https://github.com/tensorflow/tensorflow/issues/15985
-    indices = tf.where(tf.sequence_mask(sequence_length))
-    values = tf.gather_nd(dense_tensor, indices)
-    shape = tf.shape(dense_tensor, out_type=tf.int64)
-    return tf.SparseTensor(indices, values, shape)
-
-
 def learning_rate_scheduler(epoch):
-    if epoch < 3:
-        return 1e-3
-    elif epoch < 4:
-        return 5e-4
-    elif epoch < 5:
-        return 2.5e-4
-    elif epoch < 6:
-        return 1e-4
-    elif epoch < 7:
-        return 1e-5
-    else:
-        return 1e-6
+    return args.learning_rate * (2 ** -epoch)
 
 
 class Network:
     def __init__(self):
         # Create an empty graph and a session
         graph = tf.Graph()
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
-        self.session = tf.Session(graph=graph, config=tf.ConfigProto(gpu_options=gpu_options))
+        self.session = tf.Session(graph=graph)
 
     def construct(self, args, num_words, num_chars, num_tags):
         with self.session.graph.as_default():
@@ -46,42 +26,57 @@ class Network:
             self.charseq_ids = tf.placeholder(tf.int32, [None, None], name="charseq_ids")
             self.tags = tf.placeholder(tf.int32, [None, None], name="tags")
             self.learning_rate = tf.placeholder_with_default(0.001, [], name="learning_rate")
+            self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
-            # Generate character embeddings for num_chars of dimensionality args.cle_dim.
-            char_embeddings = tf.get_variable("char_embeddings", [num_chars, args.cle_dim])
+            with tf.variable_scope("word_embedding"):
+                # Create word embeddings for num_words of dimensionality args.we_dim.
+                word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
 
-            # Embed self.charseqs using the character embeddings.
-            # [batch, sentence, word, char embed dim]
-            embedded_chars = tf.nn.embedding_lookup(char_embeddings, self.charseqs)
+                # Embed self.word_ids using the word embeddings.
+                embedded_word_ids = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
 
-            # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs using
-            # a cell of dimensionality `args.cle_dim`.
-            fwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
-            bwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
-            char_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd_cle, bwd_cle, embedded_chars,
-                                                               sequence_length=self.charseq_lens,
-                                                               dtype=tf.float32,
-                                                               scope='CharBiRNN')
+            with tf.variable_scope("char_embedding"):
+                # Generate character embeddings for num_chars of dimensionality args.cle_dim.
+                char_embeddings = tf.get_variable("char_embeddings", [num_chars, args.cle_dim])
 
-            # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE).
-            fwd_bwd = tf.concat(char_outputs, axis=-1)
-            cle_table = tf.reduce_sum(fwd_bwd, axis=1)
+                # Embed self.charseqs using the character embeddings.
+                # [batch, sentence, word, char embed dim]
+                embedded_chars = tf.nn.embedding_lookup(char_embeddings, self.charseqs)
+                embedded_chars = tf.layers.dropout(embedded_chars, rate=args.dropout, training=self.is_training)
 
-            # For each word, use suitable CLE according to self.charseq_ids.
-            embedded_char_ids = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
+            # with tf.variable_scope("cnne_embedding"):
+            #     conv = tf.layers.conv1d(embedded_chars, args.cnne_filters, args.cnne_max, strides=1, padding='valid')
+            #     pool = tf.reduce_max(conv, axis=1)
+            #     embedded_cnne = tf.concat(pool, axis=-1)
+            #
+            #     # Concatenate the word embeddings (computed above) and the CNNE (in this order).
+            #     embedded_char_ids_cnne = tf.nn.embedding_lookup(embedded_cnne, self.charseq_ids)
 
-            # Create word embeddings for num_words of dimensionality args.we_dim.
-            word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
+            with tf.variable_scope("cle_embedding"):
+                # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs using
+                # a cell of dimensionality `args.cle_dim`.
+                fwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_char_dim)
+                bwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_char_dim)
+                char_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd_cle, bwd_cle, embedded_chars,
+                                                                   sequence_length=self.charseq_lens,
+                                                                   dtype=tf.float32,
+                                                                   scope='CharBiRNN')
 
-            # Embed self.word_ids using the word embeddings.
-            embedded_word_ids = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
+                # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE).
+                fwd_bwd = tf.concat(char_outputs, axis=-1)
+                cle_table = tf.reduce_sum(fwd_bwd, axis=1)
 
-            total_word_embeddings = tf.concat([embedded_word_ids, embedded_char_ids], axis=-1)
+                # For each word, use suitable CLE according to self.charseq_ids.
+                embedded_char_ids_cle = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
+                embedded_char_ids_cle = tf.layers.dropout(embedded_char_ids_cle, rate=args.dropout, training=self.is_training)
+
+            total_word_embeddings = tf.concat([embedded_word_ids, embedded_char_ids_cle], axis=-1)
+            total_word_embeddings = tf.layers.dropout(total_word_embeddings, rate=args.dropout, training=self.is_training)
 
             # Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
             # Use given rnn_cell (different for fwd and bwd direction).
-            fwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
-            bwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_cell_dim)
+            fwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_word_dim)
+            bwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_word_dim)
             outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, total_word_embeddings,
                                                           sequence_length=self.sentence_lens,
                                                           dtype=tf.float32,
@@ -89,9 +84,9 @@ class Network:
 
             # Concatenate the outputs for fwd and bwd directions.
             rnn_outputs = tf.concat(outputs, axis=-1)
+            rnn_outputs = tf.layers.dropout(rnn_outputs, rate=args.dropout, training=self.is_training)
 
-            # Add a dense layer (without activation) into num_tags classes and
-            # store result in `output_layer`.
+            # Add a dense layer (without activation) into num_tags classes
             output_layer = tf.layers.dense(rnn_outputs, num_tags)
 
             # log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(output_layer,
@@ -118,10 +113,6 @@ class Network:
             loss = tf.losses.sparse_softmax_cross_entropy(self.tags, output_layer, weights=weights)
 
             global_step = tf.train.create_global_step()
-            # decay_steps = args.train_size // args.batch_size
-            # decay_rate = (args.learning_rate_final / args.learning_rate) ** (1 / (args.epochs - 1))
-            # learning_rate = tf.train.exponential_decay(args.learning_rate, global_step, decay_steps, decay_rate,
-            #                                            staircase=True)
 
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
@@ -169,10 +160,11 @@ class Network:
                                   self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
                                   self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
                                   self.tags: word_ids[train.TAGS],
-                                  self.learning_rate: learning_rate})
+                                  self.learning_rate: learning_rate,
+                                  self.is_training: True})
                 pbar.update(len(sentence_lens))
 
-                if step % 500 == 0:
+                if step % 2000 == 0:
                     accuracy = network.evaluate("dev", dev, args.batch_size)
 
                     print("{:.2f}".format(100 * accuracy))
@@ -224,11 +216,16 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
-    parser.add_argument("--rnn_cell_dim", default=1024, type=int, help="RNN cell dimension.")
-    parser.add_argument("--cle_dim", default=512, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
+    parser.add_argument("--learning_rate", default=0.001)
+    parser.add_argument("--rnn_char_dim", default=1024, type=int, help="RNN cell dimension.")
+    parser.add_argument("--rnn_word_dim", default=1600, type=int, help="RNN cell dimension.")
+    parser.add_argument("--cle_dim", default=100, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--cnne_filters", default=30, type=int, help="CNN embedding filters per length.")
+    parser.add_argument("--cnne_max", default=4, type=int, help="Maximum CNN filter length.")
     parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
+    parser.add_argument("--dropout", default=0.1, type=float, help="Dropout rate.")
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 

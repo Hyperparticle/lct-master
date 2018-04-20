@@ -30,14 +30,16 @@ class Network:
 
             with tf.variable_scope("word_embedding"):
                 # Create word embeddings for num_words of dimensionality args.we_dim.
-                word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim])
+                word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim],
+                                                  initializer=tf.contrib.layers.xavier_initializer())
 
                 # Embed self.word_ids using the word embeddings.
                 embedded_word_ids = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
 
             with tf.variable_scope("char_embedding"):
                 # Generate character embeddings for num_chars of dimensionality args.cle_dim.
-                char_embeddings = tf.get_variable("char_embeddings", [num_chars, args.cle_dim])
+                char_embeddings = tf.get_variable("char_embeddings", [num_chars, args.cle_dim],
+                                                  initializer=tf.contrib.layers.xavier_initializer())
 
                 # Embed self.charseqs using the character embeddings.
                 # [batch, sentence, word, char embed dim]
@@ -220,10 +222,10 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--learning_rate", default=0.001)
     parser.add_argument("--rnn_char_dim", default=1024, type=int, help="RNN cell dimension.")
-    parser.add_argument("--rnn_word_dim", default=1600, type=int, help="RNN cell dimension.")
-    parser.add_argument("--cle_dim", default=100, type=int, help="Character-level embedding dimension.")
-    parser.add_argument("--cnne_filters", default=30, type=int, help="CNN embedding filters per length.")
-    parser.add_argument("--cnne_max", default=4, type=int, help="Maximum CNN filter length.")
+    parser.add_argument("--rnn_word_dim", default=1200, type=int, help="RNN cell dimension.")
+    parser.add_argument("--cle_dim", default=512, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--cnne_filters", default=48, type=int, help="CNN embedding filters per length.")
+    parser.add_argument("--cnne_max", default=3, type=int, help="Maximum CNN filter length.")
     parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
     parser.add_argument("--dropout", default=0.1, type=float, help="Dropout rate.")
     parser.add_argument("--load", action='store_true')

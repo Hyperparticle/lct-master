@@ -7,6 +7,36 @@ from modules import *
 import morpho_dataset
 
 
+class MorphoAnalyzer:
+    """ Loader for data of morphological analyzer.
+
+    The loaded analyzer provides an only method `get(word)` returning
+    a list of analyses, each containing two fields `lemma` and `tag`.
+    If an analysis of the word is not found, an empty list is returned.
+    """
+
+    class LemmaTag:
+        def __init__(self, lemma, tag):
+            self.lemma = lemma
+            self.tag = tag
+
+    def __init__(self, filename):
+        self.analyses = {}
+
+        with open(filename, "r", encoding="utf-8") as analyzer_file:
+            for line in analyzer_file:
+                line = line.rstrip("\n")
+                columns = line.split("\t")
+
+                analyses = []
+                for i in range(1, len(columns) - 1, 2):
+                    analyses.append(MorphoAnalyzer.LemmaTag(columns[i], columns[i + 1]))
+                self.analyses[columns[0]] = analyses
+
+    def get(self, word):
+        return self.analyses.get(word, [])
+
+
 def learning_rate_scheduler(epoch):
     return args.learning_rate * (2 ** -epoch)
 
@@ -29,9 +59,6 @@ class Network:
             self.learning_rate = tf.placeholder_with_default(0.001, [], name="learning_rate")
             self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
-            num_blocks = 2
-            num_heads = 8
-
             with tf.variable_scope("word_embedding"):
                 # Create word embeddings for num_words of dimensionality args.we_dim.
                 word_embeddings = tf.get_variable("word_embeddings", [num_words, args.we_dim],
@@ -51,8 +78,7 @@ class Network:
                 embedded_chars = tf.layers.dropout(embedded_chars, rate=args.dropout, training=self.is_training)
 
             with tf.variable_scope("cle_embedding"):
-                # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs using
-                # a cell of dimensionality `args.cle_dim`.
+                # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs
                 fwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_char_dim)
                 bwd_cle = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_char_dim)
                 char_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd_cle, bwd_cle, embedded_chars,
@@ -66,50 +92,26 @@ class Network:
 
                 # For each word, use suitable CLE according to self.charseq_ids.
                 embedded_char_ids_cle = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
-                embedded_char_ids_cle = tf.layers.dropout(embedded_char_ids_cle, rate=args.dropout,
-                                                          training=self.is_training)
+                embedded_char_ids_cle = tf.layers.dropout(embedded_char_ids_cle, rate=args.dropout, training=self.is_training)
 
             total_word_embeddings = tf.concat([embedded_word_ids, embedded_char_ids_cle], axis=-1)
-
-            ## Positional Encoding
-            total_word_embeddings += embedding(
-                        tf.tile(tf.expand_dims(tf.range(tf.shape(total_word_embeddings)[1]), 0),
-                                [tf.shape(total_word_embeddings)[0], 1]),
-                        vocab_size=num_words,
-                        num_units=total_word_embeddings.shape[-1],
-                        zero_pad=False,
-                        scale=False,
-                        scope="enc_pe")
-            # self.enc += positional_encoding(self.word_ids,
-            #                                 num_units=hp.hidden_units,
-            #                                 zero_pad=False,
-            #                                 scale=False,
-            #                                 scope="enc_pe")
-
             total_word_embeddings = tf.layers.dropout(total_word_embeddings, rate=args.dropout, training=self.is_training)
 
-            # Encoder
-            with tf.variable_scope("encoder"):
-                enc_hidden_units = total_word_embeddings.shape[-1]
-                self.enc = total_word_embeddings
+            # Using tf.nn.bidirectional_dynamic_rnn, process the embedded inputs.
+            fwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_word_dim)
+            bwd = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_word_dim)
+            outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, total_word_embeddings,
+                                                          sequence_length=self.sentence_lens,
+                                                          dtype=tf.float32,
+                                                          scope='WordBiRNN')
 
-                ## Blocks
-                for i in range(num_blocks):
-                    with tf.variable_scope("num_blocks_{}".format(i)):
-                        ### Multihead Attention
-                        self.enc = multihead_attention(queries=self.enc,
-                                                       keys=self.enc,
-                                                       num_units=enc_hidden_units,
-                                                       num_heads=num_heads,
-                                                       dropout_rate=args.dropout,
-                                                       is_training=self.is_training,
-                                                       causality=False)
+            # Concatenate the outputs for fwd and bwd directions.
+            rnn_outputs = tf.concat(outputs, axis=-1)
+            rnn_outputs = tf.layers.dropout(rnn_outputs, rate=args.dropout, training=self.is_training)
 
-                        ### Feed Forward
-                        self.enc = feedforward(self.enc, num_units=[4 * enc_hidden_units.value, enc_hidden_units])
+            output_layer = tf.layers.dense(rnn_outputs, num_tags)
 
-            # Add a dense layer (without activation) into num_tags classes
-            output_layer = tf.layers.dense(self.enc, num_tags)
+            # TODO: CRF decoding is too slow due to the large number of tags
 
             # log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(output_layer,
             #                                                                       self.tags,
@@ -186,7 +188,7 @@ class Network:
                                   self.is_training: True})
                 pbar.update(len(sentence_lens))
 
-                if step % 1000 == 0:
+                if step % 2000 == 0:
                     accuracy = network.evaluate("dev", dev, args.batch_size)
 
                     print("{:.2f}".format(100 * accuracy))
@@ -210,18 +212,14 @@ class Network:
         return self.session.run([self.current_accuracy, self.summaries[dataset_name]])[0]
 
     def predict(self, dataset, batch_size):
-        self.session.run(self.reset_metrics)
-        labels = []
+        tags = []
         while not dataset.epoch_finished():
-            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size,
-                                                                                              including_charseqs=True)
-            predictions = self.session.run([self.predictions],
-                             {self.sentence_lens: sentence_lens,
-                              self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
-                              self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
-                              self.tags: word_ids[train.TAGS]})
-            labels.append(predictions)
-        return labels
+            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size, including_charseqs=True)
+            tags.extend(self.session.run(self.predictions,
+                                         {self.sentence_lens: sentence_lens,
+                                          self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
+                                          self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS]}))
+        return tags
 
     def save(self, path):
         self.saver.save(self.session, path)
@@ -238,14 +236,12 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
+    parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--rnn_char_dim", default=256, type=int, help="RNN cell dimension.")
-    parser.add_argument("--rnn_word_dim", default=1200, type=int, help="RNN cell dimension.")
-    parser.add_argument("--cle_dim", default=128, type=int, help="Character-level embedding dimension.")
-    parser.add_argument("--cnne_filters", default=48, type=int, help="CNN embedding filters per length.")
-    parser.add_argument("--cnne_max", default=3, type=int, help="Maximum CNN filter length.")
+    parser.add_argument("--rnn_char_dim", default=1024, type=int, help="RNN cell dimension.")
+    parser.add_argument("--rnn_word_dim", default=1600, type=int, help="RNN cell dimension.")
+    parser.add_argument("--cle_dim", default=100, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
     parser.add_argument("--dropout", default=0.1, type=float, help="Dropout rate.")
     parser.add_argument("--load", action='store_true')
@@ -263,6 +259,9 @@ if __name__ == "__main__":
     train = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-train.txt")
     dev = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-dev.txt", train=train, shuffle_batches=False)
     test = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-test.txt", train=train, shuffle_batches=False)
+
+    analyzer_dictionary = MorphoAnalyzer("czech-pdt/czech-pdt-analysis-dictionary.txt")
+    analyzer_guesser = MorphoAnalyzer("czech-pdt/czech-pdt-analysis-guesser.txt")
 
     # Construct the network
     network = Network()
@@ -291,7 +290,10 @@ if __name__ == "__main__":
     print('Final accuracy', accuracy)
 
     # Predict test data
-    with open("czech_pdt_test.txt", "w") as test_file:
-        labels = network.predict(test, args.batch_size)
-        for label in labels:
-            print(label, file=test_file)
+    with open("tagger_sota_test.txt", "w") as test_file:
+        forms = test.factors[test.FORMS].strings
+        tags = network.predict(test, args.batch_size)
+        for s in range(len(forms)):
+            for i in range(len(forms[s])):
+                print("{}\t_\t{}".format(forms[s][i], test.factors[test.TAGS].words[tags[s][i]]), file=test_file)
+            print("", file=test_file)

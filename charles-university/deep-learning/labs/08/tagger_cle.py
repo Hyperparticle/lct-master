@@ -40,19 +40,19 @@ class Network:
             # Generate character embeddings for num_chars of dimensionality args.cle_dim.
             charseq_embeddings = tf.get_variable("charseq_embeddings", [num_chars, args.cle_dim])
 
-            # Embed self.charseqs using the character embeddings.
+            # Embed self.charseqs (list of unique words in the batch) using the character embeddings.
             embedded_charseqs = tf.nn.embedding_lookup(charseq_embeddings, self.charseqs)
 
             # Use `tf.nn.bidirectional_dynamic_rnn` to process embedded self.charseqs using
             # a GRU cell of dimensionality `args.cle_dim`.
-            fwd = tf.nn.rnn_cell.GRUCell(args.rnn_cell_dim)
-            bwd = tf.nn.rnn_cell.GRUCell(args.rnn_cell_dim)
+            fwd = tf.nn.rnn_cell.GRUCell(args.cle_dim)
+            bwd = tf.nn.rnn_cell.GRUCell(args.cle_dim)
             charseq_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, embedded_charseqs,
                                                                   sequence_length=self.charseq_lens,
-                                                                  dtype=tf.float32,
-                                                                  scope="charseq")
+                                                                  dtype=tf.float32)
 
-            # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE).
+            # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE)
+            # of unique words in the batch.
             fwd_bwd = tf.concat(charseq_outputs, axis=-1)
             cle_table = tf.reduce_sum(fwd_bwd, axis=1)
 
@@ -68,8 +68,7 @@ class Network:
             bwd = rnn_cell(args.rnn_cell_dim)
             outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, word_cle,
                                                           sequence_length=self.sentence_lens,
-                                                          dtype=tf.float32,
-                                                          scope="cle")
+                                                          dtype=tf.float32)
 
             # (we): Concatenate the outputs for fwd and bwd directions.
             hidden_layer = tf.concat(outputs, axis=-1)
@@ -94,7 +93,8 @@ class Network:
             self.training = tf.train.AdamOptimizer().minimize(loss, global_step=global_step, name="training")
 
             # Summaries
-            self.current_accuracy, self.update_accuracy = tf.metrics.accuracy(self.tags, self.predictions, weights=weights)
+            self.current_accuracy, self.update_accuracy = tf.metrics.accuracy(self.tags, self.predictions,
+                                                                              weights=weights)
             self.current_loss, self.update_loss = tf.metrics.mean(loss, weights=tf.reduce_sum(weights))
             self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
 
@@ -115,7 +115,8 @@ class Network:
 
     def train_epoch(self, train, batch_size):
         while not train.epoch_finished():
-            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = train.next_batch(batch_size, including_charseqs=True)
+            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = train.next_batch(batch_size,
+                                                                                            including_charseqs=True)
             self.session.run(self.reset_metrics)
             self.session.run([self.training, self.summaries["train"]],
                              {self.sentence_lens: sentence_lens,
@@ -126,7 +127,8 @@ class Network:
     def evaluate(self, dataset_name, dataset, batch_size):
         self.session.run(self.reset_metrics)
         while not dataset.epoch_finished():
-            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size, including_charseqs=True)
+            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size,
+                                                                                              including_charseqs=True)
             self.session.run([self.update_accuracy, self.update_loss],
                              {self.sentence_lens: sentence_lens,
                               self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],

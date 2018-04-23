@@ -38,6 +38,7 @@ class MorphoAnalyzer:
 
 
 def learning_rate_scheduler(epoch):
+    """Outputs the learning rate as a function of the current epoch (2^-n)"""
     return args.learning_rate * (2 ** -epoch)
 
 
@@ -111,7 +112,8 @@ class Network:
 
             output_layer = tf.layers.dense(rnn_outputs, num_tags)
 
-            # TODO: CRF decoding is too slow due to the large number of tags
+            # Use CRF instead of a dense layer as explained in https://arxiv.org/pdf/1603.01354.pdf
+            # CRF decoding is slow due to the large number of tags (but it trains better)
 
             # log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(output_layer,
             #                                                                       self.tags,
@@ -239,8 +241,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--rnn_char_dim", default=1024, type=int, help="RNN cell dimension.")
-    parser.add_argument("--rnn_word_dim", default=1600, type=int, help="RNN cell dimension.")
+    parser.add_argument("--rnn_char_dim", default=256, type=int, help="RNN cell dimension.")
+    parser.add_argument("--rnn_word_dim", default=1024, type=int, help="RNN cell dimension.")
     parser.add_argument("--cle_dim", default=100, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
     parser.add_argument("--dropout", default=0.1, type=float, help="Dropout rate.")

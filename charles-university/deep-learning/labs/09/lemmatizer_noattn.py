@@ -42,8 +42,7 @@ class Network:
 
             # Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
             # using forward RNN and store the resulting states into `source_states`.
-            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_ids,
-                                                  sequence_length=self.source_seq_lens, dtype=tf.float32)
+            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_ids, dtype=tf.float32)
 
             # Index the unique words using self.source_ids and self.target_ids.
             sentence_mask = tf.sequence_mask(self.sentence_lens)
@@ -87,8 +86,7 @@ class Network:
                     return finished, inputs, states
 
                 def step(self, time, inputs, states, name=None):
-                    outputs, states = tf.nn.dynamic_rnn(decoder_rnn, inputs, initial_state=states,
-                                                        dtype=tf.float32)  # Run the decoder GRU cell using inputs and states.
+                    outputs, states = decoder_rnn(inputs, states) # Run the decoder GRU cell using inputs and states.
                     outputs = decoder_layer(outputs)  # Apply the decoder_layer on outputs.
                     next_input = embedded_target_ids[:, time]  # Next input are words with index `time` in target_embedded.
                     finished = target_lens <= time + 1  # False if target_lens > time + 1, True otherwise.
@@ -101,8 +99,7 @@ class Network:
             # directly output the predicted target characters.
             class DecoderPrediction(tf.contrib.seq2seq.Decoder):
                 @property
-                def batch_size(self): return tf.shape(source_states)[
-                    0]  # Return size of the batch, using for example source_states size
+                def batch_size(self): return tf.shape(source_states)[0]  # Return size of the batch, using for example source_states size
 
                 @property
                 def output_dtype(self): return tf.int32  # Type for predicted target characters
@@ -113,14 +110,12 @@ class Network:
                 def initialize(self, name=None):
                     finished = tf.fill([self.batch_size], False)  # False of shape [self.batch_size].
                     states = source_states  # Initial decoder state to use.
-                    inputs = tf.nn.embedding_lookup(source_embeddings, tf.fill([self.batch_size],
-                                                                               bow))  # embedded BOW characters of shape [self.batch_size]. You can use
+                    inputs = tf.nn.embedding_lookup(source_embeddings, tf.fill([self.batch_size], bow))  # embedded BOW characters of shape [self.batch_size]. You can use
                     # tf.fill to generate BOWs of appropriate size.
                     return finished, inputs, states
 
                 def step(self, time, inputs, states, name=None):
-                    outputs, states = tf.nn.dynamic_rnn(decoder_rnn, inputs, initial_state=states,
-                                                        dtype=tf.float32)  # Run the decoder GRU cell using inputs and states.
+                    outputs, states = decoder_rnn(inputs, states)  # Run the decoder GRU cell using inputs and states.
                     outputs = decoder_layer(outputs)  # Apply the decoder_layer on outputs.
                     outputs = tf.argmax(outputs,
                                         output_type=tf.int32)  # Use tf.argmax to choose most probable class (supply parameter `output_type=tf.int32`).

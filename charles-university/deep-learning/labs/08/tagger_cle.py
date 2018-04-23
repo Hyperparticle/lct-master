@@ -47,14 +47,14 @@ class Network:
             # a GRU cell of dimensionality `args.cle_dim`.
             fwd = tf.nn.rnn_cell.GRUCell(args.cle_dim)
             bwd = tf.nn.rnn_cell.GRUCell(args.cle_dim)
-            charseq_outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, embedded_charseqs,
+            __, state = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, embedded_charseqs,
                                                                   sequence_length=self.charseq_lens,
-                                                                  dtype=tf.float32)
+                                                                  dtype=tf.float32,
+                                                                  scope="charseq")
 
             # Sum the resulting fwd and bwd state to generate character-level word embedding (CLE)
             # of unique words in the batch.
-            fwd_bwd = tf.concat(charseq_outputs, axis=-1)
-            cle_table = tf.reduce_sum(fwd_bwd, axis=1)
+            cle_table = tf.reduce_sum(state, axis=0)
 
             # For each word, use suitable CLE according to self.charseq_ids.
             embedded_charseq_ids = tf.nn.embedding_lookup(cle_table, self.charseq_ids)
@@ -68,7 +68,8 @@ class Network:
             bwd = rnn_cell(args.rnn_cell_dim)
             outputs, __ = tf.nn.bidirectional_dynamic_rnn(fwd, bwd, word_cle,
                                                           sequence_length=self.sentence_lens,
-                                                          dtype=tf.float32)
+                                                          dtype=tf.float32,
+                                                          scope="cle")
 
             # (we): Concatenate the outputs for fwd and bwd directions.
             hidden_layer = tf.concat(outputs, axis=-1)

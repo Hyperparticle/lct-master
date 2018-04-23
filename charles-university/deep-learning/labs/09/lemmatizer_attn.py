@@ -72,6 +72,7 @@ class Network:
                 # TODO: Project source_encoded using source_layer.
 
                 # TODO: Change shape of states from [a, b] to [a, 1, b] and project it using state_layer.
+                # tf.expand_dims
 
                 # TODO: Sum the two above projections, apply tf.tanh and project the result using weight_layer.
                 # The result has shape [x, y, 1].

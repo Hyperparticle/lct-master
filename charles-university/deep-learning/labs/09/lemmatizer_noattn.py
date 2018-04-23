@@ -58,7 +58,7 @@ class Network:
             target_embeddings = tf.get_variable("target_embeddings", [target_chars, args.char_dim])
 
             # Embed the target_seqs using the target embeddings.
-            embedded_target_ids = tf.nn.embedding_lookup(target_embeddings, self.target_ids)
+            embedded_target_ids = tf.nn.embedding_lookup(target_embeddings, target_seqs)
 
             # Generate a decoder GRU with dimension args.rnn_dim.
             decoder_rnn = tf.nn.rnn_cell.GRUCell(args.rnn_dim)
@@ -71,8 +71,7 @@ class Network:
             # target character.
             class DecoderTraining(tf.contrib.seq2seq.Decoder):
                 @property
-                def batch_size(self): return tf.shape(source_states)[
-                    0]  # Return size of the batch, using for example source_states size
+                def batch_size(self): return tf.shape(source_states)[0]  # Return size of the batch, using for example source_states size
 
                 @property
                 def output_dtype(self): return tf.float32  # Type for logits of target characters
@@ -81,10 +80,9 @@ class Network:
                 def output_size(self): return target_chars  # Length of logits for every output
 
                 def initialize(self, name=None):
-                    finished = target_lens >= 0  # False if target_lens > 0, True otherwise
+                    finished = target_lens <= 0  # False if target_lens > 0, True otherwise
                     states = source_states  # Initial decoder state to use
-                    inputs = tf.nn.embedding_lookup(source_embeddings, tf.fill([self.batch_size],
-                                                                               bow))  # embedded BOW characters of shape [self.batch_size]. You can use
+                    inputs = tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow))  # embedded BOW characters of shape [self.batch_size]. You can use
                     # tf.fill to generate BOWs of appropriate size.
                     return finished, inputs, states
 
@@ -92,7 +90,7 @@ class Network:
                     outputs, states = tf.nn.dynamic_rnn(decoder_rnn, inputs, initial_state=states,
                                                         dtype=tf.float32)  # Run the decoder GRU cell using inputs and states.
                     outputs = decoder_layer(outputs)  # Apply the decoder_layer on outputs.
-                    next_input = embedded_target_ids[time]  # Next input are words with index `time` in target_embedded.
+                    next_input = embedded_target_ids[:, time]  # Next input are words with index `time` in target_embedded.
                     finished = target_lens <= time + 1  # False if target_lens > time + 1, True otherwise.
                     return outputs, states, next_input, finished
 

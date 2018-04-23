@@ -38,11 +38,12 @@ class Network:
             source_embeddings = tf.get_variable("source_embeddings", [source_chars, args.char_dim])
 
             # Embed the self.source_seqs using the source embeddings.
-            embedded_source_ids = tf.nn.embedding_lookup(source_embeddings, self.source_ids)
+            embedded_source_seqs = tf.nn.embedding_lookup(source_embeddings, self.source_seqs)
 
             # Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
             # using forward RNN and store the resulting states into `source_states`.
-            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_ids, dtype=tf.float32)
+            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_seqs,
+                                                  sequence_length=self.source_seq_lens, dtype=tf.float32)
 
             # Index the unique words using self.source_ids and self.target_ids.
             sentence_mask = tf.sequence_mask(self.sentence_lens)
@@ -57,7 +58,7 @@ class Network:
             target_embeddings = tf.get_variable("target_embeddings", [target_chars, args.char_dim])
 
             # Embed the target_seqs using the target embeddings.
-            embedded_target_ids = tf.nn.embedding_lookup(target_embeddings, target_seqs)
+            embedded_target_seqs = tf.nn.embedding_lookup(target_embeddings, target_seqs)
 
             # Generate a decoder GRU with dimension args.rnn_dim.
             decoder_rnn = tf.nn.rnn_cell.GRUCell(args.rnn_dim)
@@ -88,7 +89,7 @@ class Network:
                 def step(self, time, inputs, states, name=None):
                     outputs, states = decoder_rnn(inputs, states) # Run the decoder GRU cell using inputs and states.
                     outputs = decoder_layer(outputs)  # Apply the decoder_layer on outputs.
-                    next_input = embedded_target_ids[:, time]  # Next input are words with index `time` in target_embedded.
+                    next_input = embedded_target_seqs[:, time]  # Next input are words with index `time` in target_embedded.
                     finished = target_lens <= time + 1  # False if target_lens > time + 1, True otherwise.
                     return outputs, states, next_input, finished
 

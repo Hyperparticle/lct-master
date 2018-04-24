@@ -42,10 +42,9 @@ class Network:
 
             # Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
             # using forward RNN and store the resulting states into `source_states`.
-            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_seqs,
-                                                  sequence_length=self.source_seq_lens, dtype=tf.float32)
+            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_seqs, dtype=tf.float32)
 
-            # Index the unique words using self.source_ids and self.target_ids.
+            # Index the unique words using self.source_ids and self.target_id
             sentence_mask = tf.sequence_mask(self.sentence_lens)
             source_states = tf.boolean_mask(tf.nn.embedding_lookup(source_states, self.source_ids), sentence_mask)
             source_lens = tf.boolean_mask(tf.nn.embedding_lookup(self.source_seq_lens, self.source_ids), sentence_mask)
@@ -111,17 +110,15 @@ class Network:
                 def initialize(self, name=None):
                     finished = tf.fill([self.batch_size], False)  # False of shape [self.batch_size].
                     states = source_states  # Initial decoder state to use.
-                    inputs = tf.nn.embedding_lookup(source_embeddings, tf.fill([self.batch_size], bow))  # embedded BOW characters of shape [self.batch_size]. You can use
+                    inputs = tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow))  # embedded BOW characters of shape [self.batch_size]. You can use
                     # tf.fill to generate BOWs of appropriate size.
                     return finished, inputs, states
 
                 def step(self, time, inputs, states, name=None):
                     outputs, states = decoder_rnn(inputs, states)  # Run the decoder GRU cell using inputs and states.
                     outputs = decoder_layer(outputs)  # Apply the decoder_layer on outputs.
-                    outputs = tf.argmax(outputs,
-                                        output_type=tf.int32)  # Use tf.argmax to choose most probable class (supply parameter `output_type=tf.int32`).
-                    next_input = tf.nn.embedding_lookup(target_embeddings,
-                                                        outputs)  # Embed `outputs` using target_embeddings
+                    outputs = tf.argmax(outputs, output_type=tf.int32, axis=1)  # Use tf.argmax to choose most probable class (supply parameter `output_type=tf.int32`).
+                    next_input = tf.nn.embedding_lookup(target_embeddings, outputs)  # Embed `outputs` using target_embeddings
                     finished = outputs == eow  # True where outputs==eow, False otherwise
                     return outputs, states, next_input, finished
 
@@ -178,7 +175,8 @@ class Network:
                 {self.sentence_lens: sentence_lens,
                  self.source_ids: charseq_ids[train.FORMS], self.target_ids: charseq_ids[train.LEMMAS],
                  self.source_seqs: charseqs[train.FORMS], self.target_seqs: charseqs[train.LEMMAS],
-                 self.source_seq_lens: charseq_lens[train.FORMS], self.target_seq_lens: charseq_lens[train.LEMMAS]})
+                 self.source_seq_lens: charseq_lens[train.FORMS],
+                 self.target_seq_lens: charseq_lens[train.LEMMAS]})
 
             form, gold_lemma, system_lemma = "", "", ""
             for i in range(charseq_lens[train.FORMS][0]):

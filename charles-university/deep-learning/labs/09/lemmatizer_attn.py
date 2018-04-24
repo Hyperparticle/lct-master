@@ -34,6 +34,7 @@ class Network:
 
             # Encoder
             # TODO: Generate source embeddings for source chars, of shape [source_chars, args.char_dim].
+            source_embeddings = tf.get_variable("source_embeddings", [source_chars, args.char_dim])
 
             # TODO: Embed the self.source_seqs using the source embeddings.
 

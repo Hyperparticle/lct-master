@@ -119,7 +119,7 @@ class Network:
                     outputs = decoder_layer(outputs)  # Apply the decoder_layer on outputs.
                     outputs = tf.argmax(outputs, output_type=tf.int32, axis=1)  # Use tf.argmax to choose most probable class (supply parameter `output_type=tf.int32`).
                     next_input = tf.nn.embedding_lookup(target_embeddings, outputs)  # Embed `outputs` using target_embeddings
-                    finished = outputs == eow  # True where outputs==eow, False otherwise
+                    finished = tf.equal(outputs, eow)  # True where outputs==eow, False otherwise
                     return outputs, states, next_input, finished
 
             self.predictions, _, self.prediction_lens = tf.contrib.seq2seq.dynamic_decode(

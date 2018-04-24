@@ -33,14 +33,21 @@ class Network:
             target_seqs = tf.reverse_sequence(target_seqs, target_seq_lens, 1)
 
             # Encoder
-            # TODO: Generate source embeddings for source chars, of shape [source_chars, args.char_dim].
+            # Generate source embeddings for source chars, of shape [source_chars, args.char_dim].
             source_embeddings = tf.get_variable("source_embeddings", [source_chars, args.char_dim])
 
-            # TODO: Embed the self.source_seqs using the source embeddings.
+            # Embed the self.source_seqs using the source embeddings.
+            embedded_source_seqs = tf.nn.embedding_lookup(source_embeddings, self.source_seqs)
 
-            # TODO: Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
+            # Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
             # using bidirectional RNN. Store the summed fwd and bwd outputs in `source_encoded`
             # and the summed fwd and bwd states into `source_states`.
+            source_encoded, source_states = tf.nn.bidirectional_dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+                                                                            tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+                                                                            embedded_source_seqs,
+                                                                            dtype=tf.float32)
+            source_encoded = tf.reduce_sum(source_encoded, axis=0)
+            source_states = tf.reduce_sum(source_states, axis=0)
 
             # Index the unique words using self.source_ids and self.target_ids.
             sentence_mask = tf.sequence_mask(self.sentence_lens)
@@ -52,61 +59,75 @@ class Network:
             target_lens = tf.boolean_mask(tf.nn.embedding_lookup(target_seq_lens, self.target_ids), sentence_mask)
 
             # Decoder
-            # TODO: Generate target embeddings for target chars, of shape [target_chars, args.char_dim].
+            # Generate target embeddings for target chars, of shape [target_chars, args.char_dim].
+            target_embeddings = tf.get_variable("target_embeddings", [target_chars, args.char_dim])
 
-            # TODO: Embed the target_seqs using the target embeddings.
+            # Embed the target_seqs using the target embeddings.
+            embedded_target_seqs = tf.nn.embedding_lookup(target_embeddings, target_seqs)
 
-            # TODO: Generate a decoder GRU with wimension args.rnn_dim.
+            # Generate a decoder GRU with dimension args.rnn_dim.
+            decoder_rnn = tf.nn.rnn_cell.GRUCell(args.rnn_dim)
 
-            # TODO: Create a `decoder_layer` -- a fully connected layer with
+            # Create a `decoder_layer` -- a fully connected layer with
             # target_chars neurons used in the decoder to classify into target characters.
+            decoder_layer = tf.layers.Dense(target_chars)
 
             # Attention
-            # TODO: Generate three fully connected layers without activations:
+            # Generate three fully connected layers without activations:
             # - `source_layer` with args.rnn_dim units
             # - `state_layer` with args.rnn_dim units
             # - `weight_layer` with 1 unit
+            source_layer = tf.layers.Dense(args.rnn_dim)
+            state_layer = tf.layers.Dense(args.rnn_dim)
+            weight_layer = tf.layers.Dense(1)
 
             def with_attention(inputs, states):
                 # Generate the attention
 
-                # TODO: Project source_encoded using source_layer.
+                # Project source_encoded using source_layer.
+                proj_source = source_layer(source_encoded)
 
-                # TODO: Change shape of states from [a, b] to [a, 1, b] and project it using state_layer.
+                # Change shape of states from [a, b] to [a, 1, b] and project it using state_layer.
                 # tf.expand_dims
+                proj_states = state_layer(tf.expand_dims(states, axis=1))
 
-                # TODO: Sum the two above projections, apply tf.tanh and project the result using weight_layer.
+                # Sum the two above projections, apply tf.tanh and project the result using weight_layer.
                 # The result has shape [x, y, 1].
+                sum_source_states = weight_layer(tf.tanh(proj_source + proj_states))
 
-                # TODO: Apply tf.nn.softmax to the latest result, using axis corresponding to source characters.
+                # Apply tf.nn.softmax to the latest result, using axis corresponding to source characters.
+                weight_vec = tf.nn.softmax(sum_source_states, axis=1)
 
-                # TODO: Multiply the source_encoded by the latest result, and sum the results with respect
+                # Multiply the source_encoded by the latest result, and sum the results with respect
                 # to the axis corresponding to source characters. This is the final attention.
+                final_attn = tf.reduce_sum(source_encoded * weight_vec, axis=1)
 
-                # TODO: Return concatenation of inputs and the computed attention.
+                # Return concatenation of inputs and the computed attention.
+                return tf.concat([inputs, final_attn], axis=1)
 
             # The DecoderTraining will be used during training. It will output logits for each
             # target character.
             class DecoderTraining(tf.contrib.seq2seq.Decoder):
                 @property
-                def batch_size(self): return # TODO: Return size of the batch, using for example source_states size
+                def batch_size(self): return tf.shape(source_states)[0]  # Return size of the batch, using for example source_states size
                 @property
                 def output_dtype(self): return tf.float32 # Type for logits of target characters
                 @property
                 def output_size(self): return target_chars # Length of logits for every output
 
                 def initialize(self, name=None):
-                    finished = # TODO: False if target_lens > 0, True otherwise
-                    states = # TODO: Initial decoder state to use
-                    inputs = # TODO: Call with_attention on the embedded BOW characters of shape [self.batch_size].
+                    finished = target_lens <= 0 # False if target_lens > 0, True otherwise
+                    states = source_states # Initial decoder state to use
+                    inputs = with_attention(tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow)),
+                                            states) # Call with_attention on the embedded BOW characters of shape [self.batch_size].
                              # You can use tf.fill to generate BOWs of appropriate size.
                     return finished, inputs, states
 
                 def step(self, time, inputs, states, name=None):
-                    outputs, states = # TODO: Run the decoder GRU cell using inputs and states.
-                    outputs = # TODO: Apply the decoder_layer on outputs.
-                    next_input = # TODO: Next input is with_attention called on words with index `time` in target_embedded.
-                    finished = # TODO: False if target_lens > time + 1, True otherwise.
+                    outputs, states = decoder_rnn(inputs, states) # Run the decoder GRU cell using inputs and states.
+                    outputs = decoder_layer(outputs) # Apply the decoder_layer on outputs.
+                    next_input = with_attention(embedded_target_seqs[:, time], states) # Next input is with_attention called on words with index `time` in target_embedded.
+                    finished = target_lens <= time + 1 # False if target_lens > time + 1, True otherwise.
                     return outputs, states, next_input, finished
             output_layer, _, _ = tf.contrib.seq2seq.dynamic_decode(DecoderTraining())
             self.predictions_training = tf.argmax(output_layer, axis=2, output_type=tf.int32)
@@ -115,25 +136,26 @@ class Network:
             # directly output the predicted target characters.
             class DecoderPrediction(tf.contrib.seq2seq.Decoder):
                 @property
-                def batch_size(self): return # TODO: Return size of the batch, using for example source_states size
+                def batch_size(self): return tf.shape(source_states)[0] # Return size of the batch, using for example source_states size
                 @property
                 def output_dtype(self): return tf.int32 # Type for predicted target characters
                 @property
                 def output_size(self): return 1 # Will return just one output
 
                 def initialize(self, name=None):
-                    finished = # TODO: False of shape [self.batch_size].
-                    states = # TODO: Initial decoder state to use.
-                    inputs = # TODO: Call with_attention on the embedded BOW characters of shape [self.batch_size].
+                    finished = tf.fill([self.batch_size], False) # False of shape [self.batch_size].
+                    states = source_states # Initial decoder state to use.
+                    inputs = with_attention(tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow)),
+                                            states) # Call with_attention on the embedded BOW characters of shape [self.batch_size].
                              # You can use tf.fill to generate BOWs of appropriate size.
                     return finished, inputs, states
 
                 def step(self, time, inputs, states, name=None):
-                    outputs, states = # TODO: Run the decoder GRU cell using inputs and states.
-                    outputs = # TODO: Apply the decoder_layer on outputs.
-                    outputs = # TODO: Use tf.argmax to choose most probable class (supply parameter `output_type=tf.int32`).
-                    next_input = # TODO: Embed `outputs` using target_embeddings and pass it to with_attention.
-                    finished = # TODO: True where outputs==eow, False otherwise
+                    outputs, states = decoder_rnn(inputs, states) # Run the decoder GRU cell using inputs and states.
+                    outputs = decoder_layer(outputs) # Apply the decoder_layer on outputs.
+                    outputs = tf.argmax(outputs, output_type=tf.int32, axis=1) # Use tf.argmax to choose most probable class (supply parameter `output_type=tf.int32`).
+                    next_input = with_attention(tf.nn.embedding_lookup(target_embeddings, outputs), states)  # Embed `outputs` using target_embeddings and pass it to with_attention.
+                    finished = outputs == eow # True where outputs==eow, False otherwise
                     return outputs, states, next_input, finished
             self.predictions, _, self.prediction_lens = tf.contrib.seq2seq.dynamic_decode(
                 DecoderPrediction(), maximum_iterations=tf.reduce_max(source_lens) + 10)

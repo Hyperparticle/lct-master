@@ -116,7 +116,7 @@ class Network:
                 def output_size(self): return target_chars # Length of logits for every output
 
                 def initialize(self, name=None):
-                    finished = target_lens <= 0 # False if target_lens > 0, True otherwise
+                    finished = tf.less_equal(target_lens, 0) # False if target_lens > 0, True otherwise
                     states = source_states # Initial decoder state to use
                     inputs = with_attention(tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow)),
                                             states) # Call with_attention on the embedded BOW characters of shape [self.batch_size].
@@ -127,8 +127,9 @@ class Network:
                     outputs, states = decoder_rnn(inputs, states) # Run the decoder GRU cell using inputs and states.
                     outputs = decoder_layer(outputs) # Apply the decoder_layer on outputs.
                     next_input = with_attention(embedded_target_seqs[:, time], states) # Next input is with_attention called on words with index `time` in target_embedded.
-                    finished = target_lens <= time + 1 # False if target_lens > time + 1, True otherwise.
+                    finished = tf.less_equal(target_lens, time + 1) # False if target_lens > time + 1, True otherwise.
                     return outputs, states, next_input, finished
+
             output_layer, _, _ = tf.contrib.seq2seq.dynamic_decode(DecoderTraining())
             self.predictions_training = tf.argmax(output_layer, axis=2, output_type=tf.int32)
 
@@ -157,6 +158,7 @@ class Network:
                     next_input = with_attention(tf.nn.embedding_lookup(target_embeddings, outputs), states)  # Embed `outputs` using target_embeddings and pass it to with_attention.
                     finished = tf.equal(outputs, eow) # True where outputs==eow, False otherwise
                     return outputs, states, next_input, finished
+
             self.predictions, _, self.prediction_lens = tf.contrib.seq2seq.dynamic_decode(
                 DecoderPrediction(), maximum_iterations=tf.reduce_max(source_lens) + 10)
 

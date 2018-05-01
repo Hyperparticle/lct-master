@@ -212,10 +212,10 @@ class MorphoDataset:
 def transformer_lemmatizer():
     """HParams for transformer base model for single GPU."""
     hparams = transformer.transformer_base_single_gpu()
-    hparams.max_length = 50  # Keep this as low as possible
+    hparams.max_length = 40  # Keep this as low as possible
     hparams.batch_size = 4000  # Keep this as high as possible
     hparams.learning_rate_warmup_steps = 16000  # If training diverges, increase this
-    hparams.learning_rate_constant = 0.05
+    hparams.learning_rate_constant = 0.05  # Peak 3e-5, 2e-7
     return hparams
 
 @registry.register_problem
@@ -250,7 +250,7 @@ class SotaLemmatizer(text_problems.Text2TextProblem):
         del tmp_dir
         del dataset_split
 
-        train = MorphoDataset("czech-pdt-nmt/czech-pdt-nmt-train.txt")
+        train = MorphoDataset("czech-pdt-nmt/czech-pdt-nmt-train-2.txt")
         w = train.factors[train.FORMS].words
         l = train.factors[train.LEMMAS].words
         for word_sent, lemma_sent in zip(train.factors[train.FORMS].word_ids,

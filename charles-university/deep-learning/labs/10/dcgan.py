@@ -25,7 +25,7 @@ class Network:
 
             # Generator
             def generator(z):
-                # TODO: Define a generator as a sequence of:
+                # Define a generator as a sequence of:
                 # - batch normalized dense layer with 1024 neurons and ReLU activation
                 # - batch normalized dense layer with 7 * 7 * 64 neurons and ReLU activation
                 # - change shape to a batch of images with size 7 x 7 and 64 channels
@@ -40,13 +40,34 @@ class Network:
                 # applied after the batch normalization. Also use `training=True`
                 # all the time (i.e., never use the saved estimates of moments)
                 # in the batch normalization.
+                x = z
+
+                x = tf.layers.dense(x, 1024, use_bias=False)
+                x = tf.layers.batch_normalization(x, training=True)
+                x = tf.nn.relu(x)
+
+                x = tf.layers.dense(x, 7 * 7 * 64, use_bias=False)
+                x = tf.layers.batch_normalization(x, training=True)
+                x = tf.nn.relu(x)
+
+                x = tf.reshape(x, [-1, 7, 7, 64])
+
+                x = tf.layers.conv2d_transpose(x, 32, kernel_size=5, strides=2, padding="same", use_bias=False)
+                x = tf.layers.batch_normalization(x, training=True)
+                x = tf.nn.relu(x)
+
+                x = tf.layers.conv2d_transpose(x, 1, kernel_size=5, strides=2, padding="same", activation=tf.sigmoid)
+
+                return x
+
 
             with tf.variable_scope("generator"):
-                # TODO(GAN): Define `self.generated_images` as a result of `generator` applied to `self.z`.
+                # Define `self.generated_images` as a result of `generator` applied to `self.z`.
+                self.generated_images = generator(self.z)
 
             # Discriminator
             def discriminator(image):
-                # TODO: Define a discriminator as a sequence of:
+                # Define a discriminator as a sequence of:
                 # - batch normalized conv2d with 32 output channels, kernel size 5,
                 #   "same" padding and ReLU activation
                 # - max pooling layer with kernel size 2 and stride 2
@@ -62,37 +83,73 @@ class Network:
                 # (i.e., [batch_size] instead of [batch_size, 1]) and return it.
                 #
                 # Same considerations as in `generator` regarding the batch normalization apply.
+                x = image
+
+                x = tf.layers.conv2d(x, 32, kernel_size=5, strides=2, padding="same", use_bias=False)
+                x = tf.layers.batch_normalization(x, training=True)
+                x = tf.nn.relu(x)
+
+                x = tf.layers.max_pooling2d(x, 2, strides=2)
+
+                x = tf.layers.conv2d(x, 64, kernel_size=5, strides=2, padding="same", use_bias=False)
+                x = tf.layers.batch_normalization(x, training=True)
+                x = tf.nn.relu(x)
+
+                x = tf.layers.max_pooling2d(x, 2, strides=2)
+
+                x = tf.layers.flatten(x)
+
+                x = tf.layers.dense(x, 1024, use_bias=False)
+                x = tf.layers.batch_normalization(x, training=True)
+                x = tf.nn.relu(x)
+
+                x = tf.layers.dense(x, 1)
+                return tf.squeeze(x)
 
             with tf.variable_scope("discriminator"):
-                # TODO(GAN): Define `discriminator_logit_real` as a result of
+                # Define `discriminator_logit_real` as a result of
                 # `discriminator` applied to `self.images`.
+                discriminator_logit_real = discriminator(self.images)
 
             with tf.variable_scope("discriminator", reuse = True):
-                # TODO(GAN): Define `discriminator_logit_fake` as a result of
+                # Define `discriminator_logit_fake` as a result of
                 # `discriminator` applied to `self.generated_images`.
                 #
-                # TODO(GAN): Note the discriminator is called in the same variable
+                # Note the discriminator is called in the same variable
                 # scope as several lines above -- it will try to utilize the
                 # same variables. In order to allow reusing them, we need to explicitly
                 # pass the `reuse=True` flag.
+                discriminator_logit_fake = discriminator(self.generated_images)
 
             # Losses
-            # TODO(GAN): Define `self.discriminator_loss` as a sum of
+            # Define `self.discriminator_loss` as a sum of
             # - sigmoid cross entropy loss with gold labels of ones (1.0) and discriminator_logit_real
             # - sigmoid cross entropy loss with gold labels of zeros (0.0) and discriminator_logit_fake
+            self.discriminator_loss = tf.losses.sigmoid_cross_entropy(tf.ones_like(discriminator_logit_real),
+                                                                      discriminator_logit_real) + \
+                                      tf.losses.sigmoid_cross_entropy(tf.zeros_like(discriminator_logit_fake),
+                                                                      discriminator_logit_fake)
 
-            # TODO(GAN): Define `self.generator_loss` as a sigmoid cross entropy
+            # Define `self.generator_loss` as a sigmoid cross entropy
             # loss with gold labels of ones (1.0) and discriminator_logit_fake.
+            self.generator_loss = tf.losses.sigmoid_cross_entropy(tf.ones_like(discriminator_logit_fake),
+                                                                  discriminator_logit_fake)
 
             # Training
             global_step = tf.train.create_global_step()
-            # TODO(GAN): Create `self.discriminator_training` as an AdamOptimizer.minimize
+            # Create `self.discriminator_training` as an AdamOptimizer.minimize
             # for discriminator_loss and variables in "discriminator" namespace.
             # Do *not* pass global_step as argument to AdamOptimizer.minimize.
+            self.discriminator_training = tf.train.AdamOptimizer().minimize(self.discriminator_loss,
+                                                                            var_list=tf.global_variables(
+                                                                                "discriminator"))
 
-            # TODO(GAN): Create `self.generator_training` as an AdamOptimizer.minimize
+            # Create `self.generator_training` as an AdamOptimizer.minimize
             # for generator_loss and variables in "generator" namespace.
             # This time *do* pass global_step as argument to AdamOptimizer.minimize.
+            self.generator_training = tf.train.AdamOptimizer().minimize(self.generator_loss,
+                                                                        global_step=global_step,
+                                                                        var_list=tf.global_variables("generator"))
 
             # Summaries
             discriminator_accuracy = tf.reduce_mean(tf.to_float(tf.concat([
@@ -114,19 +171,26 @@ class Network:
                 tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def sample_z(self, batch_size):
-        # TODO(GAN): Return uniform random noise in -1, 1 range using `np.random.uniform`
+        # Return uniform random noise in -1, 1 range using `np.random.uniform`
         # call, with shape [batch_size, self.z_dim].
+        return np.random.uniform(-1, 1, [batch_size, self.z_dim])
 
     def train(self, images):
-        # TODO(GAN): In first self.session.run, evaluate self.discriminator_training,
+        # In first self.session.run, evaluate self.discriminator_training,
         # self.discriminator_summary and self.discriminator_loss using
         # `images` as `self.images` and noise sampled with `self.sample_z` as `self.z`.
+        _, _, d_loss = self.session.run([self.discriminator_training, self.discriminator_summary, self.discriminator_loss],
+                                        {self.images: images, self.z: self.sample_z(len(images))})
 
-        # TODO(GAN): In second self.session.run, evaluate self.generator_training,
+        # In second self.session.run, evaluate self.generator_training,
         # self.generator_summary and self.generator_loss using
         # noise sampled with `self.sample_z` as `self.z`.
+        _, _, g_loss = self.session.run([self.generator_training, self.generator_summary, self.generator_loss],
+                                        {self.z: self.sample_z(len(images))})
 
-        # TODO(GAN): Return the sum of evaluated self.discriminator_loss and self.generator_loss.
+
+        # Return the sum of evaluated self.discriminator_loss and self.generator_loss.
+        return d_loss + g_loss
 
     def generate(self):
         GRID = 20

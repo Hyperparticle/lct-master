@@ -89,6 +89,7 @@ class Network:
             source_encoded, source_states = tf.nn.bidirectional_dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim),
                                                                             tf.nn.rnn_cell.GRUCell(args.rnn_dim),
                                                                             embedded_source_seqs,
+                                                                            sequence_length=self.source_seq_lens,
                                                                             dtype=tf.float32)
             source_encoded = tf.reduce_sum(source_encoded, axis=0)
             source_states = tf.reduce_sum(source_states, axis=0)

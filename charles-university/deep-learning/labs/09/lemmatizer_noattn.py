@@ -42,7 +42,10 @@ class Network:
 
             # Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
             # using forward RNN and store the resulting states into `source_states`.
-            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim), embedded_source_seqs, dtype=tf.float32)
+            __, source_states = tf.nn.dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+                                                  embedded_source_seqs,
+                                                  sequence_length=self.source_seq_lens,
+                                                  dtype=tf.float32)
 
             # Index the unique words using self.source_ids and self.target_id
             sentence_mask = tf.sequence_mask(self.sentence_lens)

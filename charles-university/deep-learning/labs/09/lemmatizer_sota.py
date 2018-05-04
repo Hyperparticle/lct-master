@@ -218,17 +218,16 @@ class Network:
 
             target_ids = target_seqs
 
-
-
-
             # Training
             weights = tf.sequence_mask(target_lens, dtype=tf.float32)
-            loss = tf.losses.sparse_softmax_cross_entropy(target_ids, output_layer, weights=weights)
+            one_hot_labels = tf.one_hot(target_ids, target_chars, axis=2)
+            loss = tf.losses.softmax_cross_entropy(one_hot_labels, output_layer, weights=weights,
+                                                   label_smoothing=args.label_smoothing)
             global_step = tf.train.create_global_step()
 
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
-                optimizer = tf.train.AdamOptimizer(self.learning_rate)
+                optimizer = tf.contrib.opt.LazyAdamOptimizer(self.learning_rate, beta2=0.99)
 
                 # Apply gradient clipping
                 gradients, variables = zip(*optimizer.compute_gradients(loss))
@@ -351,10 +350,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
-    parser.add_argument("--char_dim", default=100, type=int, help="Character embedding dimension.")
-    parser.add_argument("--rnn_dim", default=800, type=int, help="Dimension of the encoder and the decoder.")
+    parser.add_argument("--char_dim", default=128, type=int, help="Character embedding dimension.")
+    parser.add_argument("--rnn_dim", default=256, type=int, help="Dimension of the encoder and the decoder.")
     parser.add_argument("--learning_rate", default=0.001)
     parser.add_argument("--dropout", default=0.1, type=float, help="Dropout rate.")
+    parser.add_argument("--label_smoothing", default=0.01, type=float)
+    parser.add_argument("--depth", default=2, type=int)
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 

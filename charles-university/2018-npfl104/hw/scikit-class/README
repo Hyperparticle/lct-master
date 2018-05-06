@@ -1,0 +1,79 @@
+# Results
+
+car-evaluation
+naive bayes 0.853
+perceptron 0.867
+decision tree 0.967
+ada boost 0.828
+
+cinlp-twitter
+naive bayes 0.815
+perceptron 0.246
+decision tree 0.831
+ada boost 0.773
+
+connect-4-interpreted
+naive bayes 0.716
+perceptron 0.538
+decision tree 0.630
+ada boost 0.719
+
+connect-4-raw
+naive bayes 0.675
+perceptron 0.188
+decision tree 0.759
+ada boost 0.742
+
+credit-card-fraud
+naive bayes 0.974
+perceptron 0.935
+decision tree 0.549
+ada boost 0.813
+
+motion-capture-hand
+naive bayes 0.618
+perceptron 0.683
+decision tree 0.962
+ada boost 0.672
+
+mushrooms
+naive bayes 0.945
+perceptron 1.000
+decision tree 1.000
+ada boost 1.000
+
+music-genre-classification
+naive bayes 0.462
+perceptron 0.316
+decision tree 0.430
+ada boost 0.427
+
+pamap-easy
+naive bayes 0.117
+perceptron 0.206
+decision tree 0.979
+ada boost 0.557
+
+poker
+naive bayes 0.492
+perceptron 0.368
+decision tree 0.574
+ada boost 0.498
+
+poker-with-extra-features
+naive bayes 0.999
+perceptron 1.000
+decision tree 1.000
+ada boost 0.973
+
+spectf-heart
+naive bayes 0.080
+perceptron 0.155
+decision tree 0.636
+ada boost 0.684
+
+wine-quality
+naive bayes 0.418
+perceptron 0.090
+decision tree 0.591
+ada boost 0.371

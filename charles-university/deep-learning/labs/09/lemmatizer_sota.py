@@ -76,70 +76,74 @@ class Network:
             target_seq_lens = self.target_seq_lens + 1
             target_seqs = tf.reverse_sequence(target_seqs, target_seq_lens, 1)
 
+            # Encode the source sequences on the character level (self.source_seqs)
             with tf.variable_scope("encoder"):
-                # Encoder
-                # Generate source embeddings for source chars, of shape [source_chars, args.char_dim].
                 source_embeddings = tf.get_variable("source_embeddings", [source_chars, args.char_dim])
 
-                # Embed the self.source_seqs using the source embeddings.
                 embedded_source_seqs = tf.nn.embedding_lookup(source_embeddings, self.source_seqs)
-                embedded_source_seqs = tf.layers.dropout(embedded_source_seqs, rate=args.dropout, training=self.is_training)
+                embedded_source_seqs = tf.layers.dropout(embedded_source_seqs,
+                                                         rate=args.dropout,
+                                                         training=self.is_training)
 
-                # Using a GRU with dimension args.rnn_dim, process the embedded self.source_seqs
-                # using bidirectional RNN. Store the summed fwd and bwd outputs in `source_encoded`
-                # and the summed fwd and bwd states into `source_states`.
-                source_encoded, source_states = tf.nn.bidirectional_dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.rnn_dim),
-                                                                                tf.nn.rnn_cell.GRUCell(args.rnn_dim),
-                                                                                embedded_source_seqs,
-                                                                                sequence_length=self.source_seq_lens,
-                                                                                dtype=tf.float32,
-                                                                                scope="source_encoder")
-                source_encoded = tf.reduce_sum(source_encoded, axis=0)
-                source_states = tf.reduce_sum(source_states, axis=0)
+                source_encoder_outputs, source_encoder_state = tf.nn.bidirectional_dynamic_rnn(
+                        tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+                        tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+                        embedded_source_seqs,
+                        sequence_length=self.source_seq_lens,
+                        dtype=tf.float32,
+                        scope="source_encoder")
+                source_encoder_outputs = tf.reduce_sum(source_encoder_outputs, axis=0)
+                source_encoder_state = tf.reduce_sum(source_encoder_state, axis=0)
 
+            # Encode the source tags on the character level (self.tag_seqs)
+            # NOTE: Make sure to include valid tags on the source side.
+            # Otherwise, the network may have poor accuracy on inference.
             with tf.variable_scope("encoder_tags"):
-                tag_embeddings = tf.get_variable("tag_embeddings", [tag_chars, args.char_dim // 2])
+                tag_embeddings = tf.get_variable("tag_embeddings", [tag_chars, args.tag_char_dim])
 
                 embedded_tag_seqs = tf.nn.embedding_lookup(tag_embeddings, self.tag_seqs)
                 embedded_tag_seqs = tf.layers.dropout(embedded_tag_seqs, rate=args.dropout, training=self.is_training)
 
-                tag_encoded, tag_states = tf.nn.bidirectional_dynamic_rnn(tf.nn.rnn_cell.GRUCell(args.tag_rnn_dim),
-                                                                          tf.nn.rnn_cell.GRUCell(args.tag_rnn_dim),
-                                                                          embedded_tag_seqs,
-                                                                          sequence_length=self.tag_seq_lens,
-                                                                          dtype=tf.float32,
-                                                                          scope="tag_encoder")
-                tag_encoded = tf.reduce_sum(tag_encoded, axis=0)
-                tag_states = tf.reduce_sum(tag_states, axis=0)
+                tag_encoder_outputs, tag_encoder_states = tf.nn.bidirectional_dynamic_rnn(
+                        tf.nn.rnn_cell.GRUCell(args.tag_rnn_dim),
+                        tf.nn.rnn_cell.GRUCell(args.tag_rnn_dim),
+                        embedded_tag_seqs,
+                        sequence_length=self.tag_seq_lens,
+                        dtype=tf.float32,
+                        scope="tag_encoder")
+                tag_encoder_outputs = tf.reduce_sum(tag_encoder_outputs, axis=0)
+                tag_encoder_states = tf.reduce_sum(tag_encoder_states, axis=0)
 
-                # Index the unique words using self.source_ids and self.target_ids.
+            # Mask out sentences using embedding lookups to produce batches of words
+            with tf.variable_scope("masks"):
                 sentence_mask = tf.sequence_mask(self.sentence_lens)
 
-                source_encoded = tf.boolean_mask(tf.nn.embedding_lookup(source_encoded, self.source_ids), sentence_mask)
-                source_states = tf.boolean_mask(tf.nn.embedding_lookup(source_states, self.source_ids), sentence_mask)
+                source_encoder_outputs = tf.boolean_mask(tf.nn.embedding_lookup(source_encoder_outputs, self.source_ids), sentence_mask)
+                source_encoder_state = tf.boolean_mask(tf.nn.embedding_lookup(source_encoder_state, self.source_ids), sentence_mask)
                 source_lens = tf.boolean_mask(tf.nn.embedding_lookup(self.source_seq_lens, self.source_ids), sentence_mask)
+
+                tag_encoder_outputs = tf.boolean_mask(tf.nn.embedding_lookup(tag_encoder_outputs, self.tag_ids), sentence_mask)
+                tag_encoder_states = tf.boolean_mask(tf.nn.embedding_lookup(tag_encoder_states, self.tag_ids), sentence_mask)
 
                 target_seqs = tf.boolean_mask(tf.nn.embedding_lookup(target_seqs, self.target_ids), sentence_mask)
                 target_lens = tf.boolean_mask(tf.nn.embedding_lookup(target_seq_lens, self.target_ids), sentence_mask)
 
-                tag_encoded = tf.boolean_mask(tf.nn.embedding_lookup(tag_encoded, self.tag_ids), sentence_mask)
-                tag_states = tf.boolean_mask(tf.nn.embedding_lookup(tag_states, self.tag_ids), sentence_mask)
+                # The final output of the encoder
+                # The encoder state is the concatenation of the source encoder and tag encoder
+                encoder_state = tf.concat([source_encoder_state, tag_encoder_states], axis=-1)
 
-                source_states = tf.concat([source_states, tag_states], axis=-1)
-
+            # Decode the encoded source and tags with attention
             with tf.variable_scope("decoder"):
-                # Generate target embeddings for target chars, of shape [target_chars, args.char_dim].
                 target_embeddings = tf.get_variable("target_embeddings", [target_chars, args.char_dim])
 
-                # Embed the target_seqs using the target embeddings.
                 embedded_target_seqs = tf.nn.embedding_lookup(target_embeddings, target_seqs)
                 embedded_target_seqs = tf.layers.dropout(embedded_target_seqs, rate=args.dropout, training=self.is_training)
 
-                # Generate a decoder GRU with dimension args.rnn_dim.
+                # The decoder RNN expects to be the same size as the last dimension of the encoder state,
+                # which is the concatenation (sum) of the source encoder and tag encoder states
                 decoder_rnn = tf.nn.rnn_cell.GRUCell(args.rnn_dim + args.tag_rnn_dim)
 
-                # Create a `decoder_layer` -- a fully connected layer with
-                # target_chars neurons used in the decoder to classify into target characters.
+                # Decoder layer used to to classify into target characters.
                 decoder_layer = tf.layers.Dense(target_chars)
 
                 # Attention
@@ -150,41 +154,45 @@ class Network:
                 state_layer_tag = tf.layers.Dense(args.tag_rnn_dim)
                 weight_layer_tag = tf.layers.Dense(1)
 
+
                 def with_attention(inputs, states):
-                    # Generate the attention
+                    """Computes Bahdanau attention on the encoder inputs and states"""
 
-                    # Project source_encoded using source_layer.
-                    proj_source = source_layer(source_encoded)
+                    # Generate the attention on the source encoder
+                    with tf.variable_scope("source_attention"):
+                        # Project source_encoded using source_layer.
+                        proj_source = source_layer(source_encoder_outputs)
 
-                    # Change shape of states from [a, b] to [a, 1, b] and project it using state_layer.
-                    # tf.expand_dims
-                    proj_states = state_layer(tf.expand_dims(states, axis=1))
+                        # Change shape of states from [a, b] to [a, 1, b] and project it using state_layer.
+                        proj_states = state_layer(tf.expand_dims(states, axis=1))
 
-                    # Sum the two above projections, apply tf.tanh and project the result using weight_layer.
-                    # The result has shape [x, y, 1].
-                    sum_source_states = weight_layer(tf.tanh(proj_source + proj_states))
+                        # Sum the two above projections, apply tf.tanh and project the result using weight_layer.
+                        # The result has shape [x, y, 1].
+                        sum_source_states = weight_layer(tf.tanh(proj_source + proj_states))
 
-                    # Apply tf.nn.softmax to the latest result, using axis corresponding to source characters.
-                    weight_vec = tf.nn.softmax(sum_source_states, axis=1)
+                        # Apply tf.nn.softmax to the latest result, using axis corresponding to source characters.
+                        weight_vec = tf.nn.softmax(sum_source_states, axis=1)
 
-                    # Multiply the source_encoded by the latest result, and sum the results with respect
-                    # to the axis corresponding to source characters. This is the final attention.
-                    final_attn = tf.reduce_sum(source_encoded * weight_vec, axis=1)
+                        # Multiply the source_encoded by the latest result, and sum the results with respect
+                        # to the axis corresponding to source characters. This is the final attention.
+                        final_attn = tf.reduce_sum(source_encoder_outputs * weight_vec, axis=1)
 
-                    proj_source_tag = source_layer_tag(tag_encoded)
-                    proj_states_tag = state_layer_tag(tf.expand_dims(states, axis=1))
-                    sum_source_states_tag = weight_layer_tag(tf.tanh(proj_source_tag + proj_states_tag))
-                    weight_vec_tag = tf.nn.softmax(sum_source_states_tag, axis=1)
-                    final_attn_tag = tf.reduce_sum(tag_encoded * weight_vec_tag, axis=1)
+                    # Generate the attention on the tag encoder
+                    with tf.variable_scope("tag_attention"):
+                        proj_source_tag = source_layer_tag(tag_encoder_outputs)
+                        proj_states_tag = state_layer_tag(tf.expand_dims(states, axis=1))
+                        sum_source_states_tag = weight_layer_tag(tf.tanh(proj_source_tag + proj_states_tag))
+                        weight_vec_tag = tf.nn.softmax(sum_source_states_tag, axis=1)
+                        final_attn_tag = tf.reduce_sum(tag_encoder_outputs * weight_vec_tag, axis=1)
 
-                    # Return concatenation of inputs and the computed attention.
+                    # Return concatenation of inputs and the computed attentions.
                     return tf.concat([inputs, final_attn, final_attn_tag], axis=1)
 
                 # The DecoderTraining will be used during training. It will output logits for each
                 # target character.
                 class DecoderTraining(tf.contrib.seq2seq.Decoder):
                     @property
-                    def batch_size(self): return tf.shape(source_states)[0]  # Return size of the batch, using for example source_states size
+                    def batch_size(self): return tf.shape(encoder_state)[0]  # Return size of the batch, using encoder states size
 
                     @property
                     def output_dtype(self): return tf.float32  # Type for logits of target characters
@@ -194,10 +202,9 @@ class Network:
 
                     def initialize(self, name=None):
                         finished = target_lens <= 0  # False if target_lens > 0, True otherwise
-                        states = source_states  # Initial decoder state to use
+                        states = encoder_state  # Initial decoder state to use
                         inputs = with_attention(tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow)),
                                                 states)  # Call with_attention on the embedded BOW characters of shape [self.batch_size].
-                        # You can use tf.fill to generate BOWs of appropriate size.
                         return finished, inputs, states
 
                     def step(self, time, inputs, states, name=None):
@@ -215,7 +222,7 @@ class Network:
                 # directly output the predicted target characters.
                 class DecoderPrediction(tf.contrib.seq2seq.Decoder):
                     @property
-                    def batch_size(self): return tf.shape(source_states)[0]  # Return size of the batch, using for example source_states size
+                    def batch_size(self): return tf.shape(encoder_state)[0]  # Return size of the batch, using for example source_states size
 
                     @property
                     def output_dtype(self): return tf.int32  # Type for predicted target characters
@@ -225,10 +232,9 @@ class Network:
 
                     def initialize(self, name=None):
                         finished = tf.fill([self.batch_size], False)  # False of shape [self.batch_size].
-                        states = source_states  # Initial decoder state to use.
+                        states = encoder_state  # Initial decoder state to use.
                         inputs = with_attention(tf.nn.embedding_lookup(target_embeddings, tf.fill([self.batch_size], bow)),
                                                 states)  # Call with_attention on the embedded BOW characters of shape [self.batch_size].
-                        # You can use tf.fill to generate BOWs of appropriate size.
                         return finished, inputs, states
 
                     def step(self, time, inputs, states, name=None):
@@ -247,15 +253,16 @@ class Network:
             target_ids = target_seqs
 
             # Training
+            # NOTE: it appears that label smoothing does not help (at least in the range [0.01, 0.1])
             weights = tf.sequence_mask(target_lens, dtype=tf.float32)
             one_hot_labels = tf.one_hot(target_ids, target_chars, axis=2)
             loss = tf.losses.softmax_cross_entropy(one_hot_labels, output_layer, weights=weights,
                                                    label_smoothing=args.label_smoothing)
-            global_step = tf.train.create_global_step()
+            global_step = tf.train.get_or_create_global_step()
 
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
-                optimizer = tf.contrib.opt.LazyAdamOptimizer(self.learning_rate, beta2=0.99)
+                optimizer = tf.contrib.opt.LazyAdamOptimizer(self.learning_rate, beta2=args.beta2)
 
                 # Apply gradient clipping
                 gradients, variables = zip(*optimizer.compute_gradients(loss))
@@ -325,7 +332,7 @@ class Network:
                      self.is_training: True})
                 pbar.update(len(sentence_lens))
 
-                if step % 2000 == 0:
+                if step % 500 == 0:
                     accuracy = network.evaluate("dev", dev, args.batch_size)
 
                     print("{:.2f}".format(100 * accuracy))
@@ -333,7 +340,7 @@ class Network:
                     if accuracy > best_accuracy:
                         print('^^ New best ^^')
                         best_accuracy = accuracy
-                        network.save('sota/model')
+                        network.save('model/model')
 
                 step += 1
 
@@ -399,15 +406,17 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
+    parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
+    parser.add_argument("--tag_char_dim", default=64, type=int, help="Character embedding dimension for tags.")
     parser.add_argument("--char_dim", default=128, type=int, help="Character embedding dimension.")
     parser.add_argument("--tag_rnn_dim", default=256, type=int, help="Dimension of the encoder and the decoder.")
-    parser.add_argument("--rnn_dim", default=256, type=int, help="Dimension of the encoder and the decoder.")
+    parser.add_argument("--rnn_dim", default=350, type=int, help="Dimension of the encoder and the decoder.")
     parser.add_argument("--learning_rate", default=0.001)
-    parser.add_argument("--dropout", default=0., type=float, help="Dropout rate.")
+    parser.add_argument("--dropout", default=0.1, type=float, help="Dropout rate.")
     parser.add_argument("--label_smoothing", default=0., type=float)
     parser.add_argument("--depth", default=2, type=int)
+    parser.add_argument("--beta2", default=0.99, type=float)
     parser.add_argument("--load", action='store_true')
     args = parser.parse_args()
 
@@ -449,9 +458,9 @@ if __name__ == "__main__":
             if accuracy > best_accuracy:
                 print('^^ New best ^^')
                 best_accuracy = accuracy
-                network.save('sota/model')
+                network.save('model/model')
 
-    network.load('sota/model')
+    network.load('model/model')
     accuracy = network.evaluate("dev", dev, args.batch_size)
     print('Final accuracy', accuracy)
 

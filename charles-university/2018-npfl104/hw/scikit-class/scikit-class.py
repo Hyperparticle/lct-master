@@ -13,6 +13,9 @@ import gzip
 import shutil
 
 
+repo = '2018-npfl104-shared/data'
+
+
 def vectorize(train, test):
     train_cols, test_cols = [], []
 
@@ -40,8 +43,6 @@ models = [
     [DecisionTreeClassifier(), 'decision tree'],
     [AdaBoostClassifier(), 'ada boost'],
 ]
-
-repo = '2018-npfl104-shared/data'
 
 datasets = {}
 

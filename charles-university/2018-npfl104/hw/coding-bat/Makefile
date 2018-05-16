@@ -1,2 +1,2 @@
 all:
-	python3 ./exercises.py
+	python3 ./exercises.py | tee results.txt

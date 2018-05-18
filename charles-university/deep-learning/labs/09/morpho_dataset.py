@@ -166,6 +166,10 @@ class MorphoDataset:
         # General data
         batch_sentence_lens = self._sentence_lens[batch_perm]
         max_sentence_len = np.max(batch_sentence_lens)
+        batch_word_indexes = []
+        for i, slen in enumerate(batch_sentence_lens):
+            for j in range(slen):
+                batch_word_indexes.append([i, j])
 
         # Word-level data
         batch_word_ids = []
@@ -173,7 +177,6 @@ class MorphoDataset:
             batch_word_ids.append(np.zeros([batch_size, max_sentence_len], np.int32))
             for i in range(batch_size):
                 batch_word_ids[-1][i, 0:batch_sentence_lens[i]] = factor.word_ids[batch_perm[i]]
-
         if not including_charseqs:
             return self._sentence_lens[batch_perm], batch_word_ids
 
@@ -183,7 +186,7 @@ class MorphoDataset:
             batch_charseq_ids.append(np.zeros([batch_size, max_sentence_len], np.int32))
             charseqs_map = {}
             charseqs = []
-            charseq_lens = []
+            # charseq_lens = []
             for i in range(batch_size):
                 for j, charseq_id in enumerate(factor.charseq_ids[batch_perm[i]]):
                     if charseq_id not in charseqs_map:
@@ -196,4 +199,4 @@ class MorphoDataset:
             for i in range(len(charseqs)):
                 batch_charseqs[-1][i, 0:len(charseqs[i])] = charseqs[i]
 
-        return self._sentence_lens[batch_perm], batch_word_ids, batch_charseq_ids, batch_charseqs, batch_charseq_lens
+        return batch_sentence_lens, batch_word_ids, batch_charseq_ids, batch_charseqs, batch_charseq_lens, batch_word_indexes

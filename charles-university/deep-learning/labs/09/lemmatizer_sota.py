@@ -8,7 +8,8 @@ import morpho_dataset
 
 def learning_rate_scheduler(epoch):
     """Outputs the learning rate as a function of the current epoch (2^-n)"""
-    return args.learning_rate * (2 ** -epoch)
+    # return args.learning_rate * (2 ** -epoch)
+    return args.learning_rate
 
 
 class MorphoAnalyzer:
@@ -67,6 +68,9 @@ class Network:
             self.target_seqs = tf.placeholder(tf.int32, [None, None], name="target_seqs")
             self.target_seq_lens = tf.placeholder(tf.int32, [None], name="target_seq_lens")
 
+            # Map sentences -> word list
+            self.word_indexes = tf.placeholder(tf.int32, [None, 2], name='word_indexes')
+
             self.learning_rate = tf.placeholder_with_default(0.001, [], name="learning_rate")
             self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
@@ -114,6 +118,27 @@ class Network:
                 tag_encoder_outputs = tf.reduce_sum(tag_encoder_outputs, axis=0)
                 tag_encoder_states = tf.reduce_sum(tag_encoder_states, axis=0)
 
+            # with tf.variable_scope("encoder_words"):
+            #     # source_embeddings = tf.get_variable("source_embeddings", [source_chars, args.char_dim])
+            #     word_embeddings = tf.get_variable("word_embeddings", [num_words, args.rnn_dim])
+            #
+            #     embedded_word_seqs = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
+            #     embedded_word_seqs = tf.layers.dropout(embedded_word_seqs,
+            #                                            rate=args.dropout,
+            #                                            training=self.is_training)
+            #
+            #     # Create multiple RNN layers
+            #     (fwd_output, bwd_output), (fwd_state, bwd_state) = tf.nn.bidirectional_dynamic_rnn(
+            #         tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+            #         tf.nn.rnn_cell.GRUCell(args.rnn_dim),
+            #         embedded_word_seqs,
+            #         sequence_length=self.sentence_lens,
+            #         dtype=tf.float32,
+            #         scope="word_encoder")
+            #     word_encoder_outputs = fwd_output + bwd_output
+            #     word_encoder_state = fwd_state + bwd_state  # Keep the last state of the multilayer RNN for decoding
+            #     word_encoder_state = tf.layers.dropout(word_encoder_state, rate=args.dropout, training=self.is_training)
+
             # Mask out sentences using embedding lookups to produce batches of words
             with tf.variable_scope("masks"):
                 sentence_mask = tf.sequence_mask(self.sentence_lens)
@@ -127,6 +152,9 @@ class Network:
 
                 target_seqs = tf.boolean_mask(tf.nn.embedding_lookup(target_seqs, self.target_ids), sentence_mask)
                 target_lens = tf.boolean_mask(tf.nn.embedding_lookup(target_seq_lens, self.target_ids), sentence_mask)
+
+                # word_encoder_state = tf.gather_nd(word_encoder_state, self.word_indexes)
+                # word_encoder_outputs = tf.gather_nd(word_encoder_outputs, self.word_indexes)
 
                 # The final output of the encoder
                 # The encoder state is the concatenation of the source encoder and tag encoder
@@ -311,7 +339,7 @@ class Network:
         with tqdm(total=len(train.sentence_lens)) as pbar:
             step = 1
             while not train.epoch_finished():
-                sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = train.next_batch(batch_size, including_charseqs=True)
+                sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens, word_indexes  = train.next_batch(batch_size, including_charseqs=True)
                 self.session.run(self.reset_metrics)
                 self.session.run(
                     [self.training, self.summaries["train"]],
@@ -329,25 +357,26 @@ class Network:
                      self.tag_seq_lens: charseq_lens[train.TAGS],
 
                      self.learning_rate: learning_rate,
-                     self.is_training: True})
+                     self.is_training: True,
+                     self.word_indexes: word_indexes})
                 pbar.update(len(sentence_lens))
 
-                if step % 500 == 0:
-                    accuracy = network.evaluate("dev", dev, args.batch_size)
-
-                    print("{:.2f}".format(100 * accuracy))
-
-                    if accuracy > best_accuracy:
-                        print('^^ New best ^^')
-                        best_accuracy = accuracy
-                        network.save('model/model')
+                # if step % 500 == 0:
+                #     accuracy = network.evaluate("dev", dev, args.batch_size)
+                #
+                #     print("{:.2f}".format(100 * accuracy))
+                #
+                #     if accuracy > best_accuracy:
+                #         print('^^ New best ^^')
+                #         best_accuracy = accuracy
+                #         network.save('model/model')
 
                 step += 1
 
     def evaluate(self, dataset_name, dataset, batch_size):
         self.session.run(self.reset_metrics)
         while not dataset.epoch_finished():
-            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size, including_charseqs=True)
+            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens, word_indexes  = dataset.next_batch(batch_size, including_charseqs=True)
             self.session.run([self.update_accuracy, self.update_loss],
             # self.session.run([self.update_accuracy, self.update_loss, self.update_accuracy_tagger, self.update_loss_tagger],
                              {self.sentence_lens: sentence_lens,
@@ -361,13 +390,14 @@ class Network:
                              self.tags: word_ids[train.TAGS],
                              self.tag_ids: charseq_ids[train.TAGS],
                              self.tag_seqs: charseqs[train.TAGS],
-                             self.tag_seq_lens: charseq_lens[train.TAGS]})
+                             self.tag_seq_lens: charseq_lens[train.TAGS],
+                     self.word_indexes: word_indexes})
         return self.session.run([self.current_accuracy, self.summaries[dataset_name]])[0]
 
     def predict(self, dataset, batch_size):
         lemmas = []
         while not dataset.epoch_finished():
-            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(batch_size, including_charseqs=True)
+            sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens, word_indexes = dataset.next_batch(batch_size, including_charseqs=True)
             predictions, prediction_lengths = self.session.run(
                 [self.predictions, self.prediction_lens],
                 {self.sentence_lens: sentence_lens, self.source_ids: charseq_ids[train.FORMS],
@@ -376,7 +406,8 @@ class Network:
                  self.tags: word_ids[train.TAGS],
                  self.tag_ids: charseq_ids[train.TAGS],
                  self.tag_seqs: charseqs[train.TAGS],
-                 self.tag_seq_lens: charseq_lens[train.TAGS]})
+                 self.tag_seq_lens: charseq_lens[train.TAGS],
+                     self.word_indexes: word_indexes})
 
             for length in sentence_lens:
                 lemmas.append([])
@@ -418,6 +449,7 @@ if __name__ == "__main__":
     parser.add_argument("--depth", default=2, type=int)
     parser.add_argument("--beta2", default=0.99, type=float)
     parser.add_argument("--load", action='store_true')
+    parser.add_argument("--train", action='store_true')
     args = parser.parse_args()
 
     # Create logdir name
@@ -443,7 +475,12 @@ if __name__ == "__main__":
                       len(train.factors[train.TAGS].words), len(train.factors[train.FORMS].words),
                       train.factors[train.LEMMAS].alphabet_map["<bow>"], train.factors[train.LEMMAS].alphabet_map["<eow>"])
 
-    if not args.load:
+    if args.load:
+        network.load('model/model')
+        accuracy = network.evaluate("dev", dev, args.batch_size)
+        print('Final accuracy', accuracy)
+
+    if not args.load or args.train:
         best_accuracy = 0
 
         # Train
@@ -460,9 +497,14 @@ if __name__ == "__main__":
                 best_accuracy = accuracy
                 network.save('model/model')
 
-    network.load('model/model')
-    accuracy = network.evaluate("dev", dev, args.batch_size)
-    print('Final accuracy', accuracy)
+                # Predict test data
+                with open("lemmatizer_sota_test.txt", "w") as test_file:
+                    forms = test.factors[test.FORMS].strings
+                    lemmas = network.predict(test, args.batch_size)
+                    for s in range(len(forms)):
+                        for i in range(len(forms[s])):
+                            print("{}\t{}\t_".format(forms[s][i], lemmas[s][i]), file=test_file)
+                        print("", file=test_file)
 
     # Predict test data
     with open("lemmatizer_sota_test.txt", "w") as test_file:

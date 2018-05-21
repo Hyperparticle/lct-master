@@ -20,3 +20,5 @@ labs/09/sota*/
 labs/09/model*/
 labs/09/t2t*/
 labs/10/nli*/
+labs/11/*.pickle
+lemmatag_sota.7z

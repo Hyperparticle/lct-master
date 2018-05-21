@@ -8,8 +8,8 @@ import morpho_dataset
 
 def learning_rate_scheduler(epoch):
     """Outputs the learning rate as a function of the current epoch (2^-n)"""
-    # return args.learning_rate * (2 ** -epoch)
-    return args.learning_rate
+    return args.learning_rate * (1.5 ** -(epoch / 2))
+    # return args.learning_rate
 
 
 class MorphoAnalyzer:
@@ -369,7 +369,7 @@ class Network:
                 #     if accuracy > best_accuracy:
                 #         print('^^ New best ^^')
                 #         best_accuracy = accuracy
-                #         network.save('model/model')
+                #         network.save('{}/model'.format(args.logdir))
 
                 step += 1
 
@@ -437,8 +437,9 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", default="datasets/czech-pdt", type=str)
     parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=15, type=int, help="Number of epochs.")
     parser.add_argument("--tag_char_dim", default=64, type=int, help="Character embedding dimension for tags.")
     parser.add_argument("--char_dim", default=128, type=int, help="Character embedding dimension.")
     parser.add_argument("--tag_rnn_dim", default=256, type=int, help="Dimension of the encoder and the decoder.")
@@ -456,17 +457,14 @@ if __name__ == "__main__":
     args.logdir = "logs/{}-{}-{}".format(
         os.path.basename(__file__),
         datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
-        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value) for key, value in sorted(vars(args).items())))
-    )
+        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), value) for key, value in sorted(vars(args).items()))).replace("/", "")
+    )[:100]
     if not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Load the data
-    train = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-train.txt")
-    dev = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-dev-enrich.txt", train=train, shuffle_batches=False)
-    test = morpho_dataset.MorphoDataset("czech-pdt/czech-pdt-test-enrich.txt", train=train, shuffle_batches=False)
-
-    analyzer_dictionary = MorphoAnalyzer("czech-pdt/czech-pdt-analysis-dictionary.txt")
-    analyzer_guesser = MorphoAnalyzer("czech-pdt/czech-pdt-analysis-guesser.txt")
+    train = morpho_dataset.MorphoDataset(args.dir + "/train.txt")
+    dev = morpho_dataset.MorphoDataset(args.dir + "/dev.txt", train=train, shuffle_batches=False)
+    test = morpho_dataset.MorphoDataset(args.dir + "/test.txt", train=train, shuffle_batches=False)
 
     # Construct the network
     network = Network()
@@ -476,9 +474,9 @@ if __name__ == "__main__":
                       train.factors[train.LEMMAS].alphabet_map["<bow>"], train.factors[train.LEMMAS].alphabet_map["<eow>"])
 
     if args.load:
-        network.load('model/model')
+        network.load('{}/model'.format(args.logdir))
         accuracy = network.evaluate("dev", dev, args.batch_size)
-        print('Final accuracy', accuracy)
+        print('Start accuracy', accuracy)
 
     if not args.load or args.train:
         best_accuracy = 0
@@ -495,22 +493,13 @@ if __name__ == "__main__":
             if accuracy > best_accuracy:
                 print('^^ New best ^^')
                 best_accuracy = accuracy
-                network.save('model/model')
+                network.save('{}/model'.format(args.logdir))
 
                 # Predict test data
-                with open("lemmatizer_sota_test.txt", "w") as test_file:
+                with open("{}/pred_test.txt".format(args.logdir), "w") as test_file:
                     forms = test.factors[test.FORMS].strings
                     lemmas = network.predict(test, args.batch_size)
                     for s in range(len(forms)):
                         for i in range(len(forms[s])):
                             print("{}\t{}\t_".format(forms[s][i], lemmas[s][i]), file=test_file)
                         print("", file=test_file)
-
-    # Predict test data
-    with open("lemmatizer_sota_test.txt", "w") as test_file:
-        forms = test.factors[test.FORMS].strings
-        lemmas = network.predict(test, args.batch_size)
-        for s in range(len(forms)):
-            for i in range(len(forms[s])):
-                print("{}\t{}\t_".format(forms[s][i], lemmas[s][i]), file=test_file)
-            print("", file=test_file)

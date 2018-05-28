@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Convert all .flac files within this folder to .wav files
 
 find . -iname "*.flac" | wc

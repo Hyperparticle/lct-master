@@ -105,6 +105,56 @@ class AudioGenerator():
                  }
         return (inputs, outputs)
 
+    def get_data(self, partition):
+        """ Obtain train, validation, or test data
+        """
+        if partition == 'train':
+            audio_paths = self.train_audio_paths
+            texts = self.train_texts
+        elif partition == 'valid':
+            audio_paths = self.valid_audio_paths
+            texts = self.valid_texts
+        elif partition == 'test':
+            audio_paths = self.test_audio_paths
+            texts = self.test_texts
+        else:
+            raise Exception("Invalid partition. "
+                            "Must be train/validation")
+        
+        cur_index = 0
+        minibatch_size = len(audio_paths)
+        
+
+        features = [self.normalize(self.featurize(a)) for a in
+                    audio_paths[cur_index:cur_index + minibatch_size]]
+
+        # calculate necessary sizes
+        max_length = max([features[i].shape[0]
+                          for i in range(0, minibatch_size)])
+        max_string_length = max([len(texts[cur_index + i])
+                                 for i in range(0, minibatch_size)])
+
+        # initialize the arrays
+        X_data = np.zeros([minibatch_size, max_length,
+                           self.feat_dim * self.spectrogram + self.mfcc_dim * (not self.spectrogram)])
+        labels = np.ones([minibatch_size, max_string_length]) * 28
+        input_length = np.zeros([minibatch_size, 1])
+        label_length = np.zeros([minibatch_size, 1])
+
+        for i in range(0, minibatch_size):
+            # calculate X_data & input_length
+            feat = features[i]
+            input_length[i] = feat.shape[0]
+            X_data[i, :feat.shape[0], :] = feat
+
+            # calculate labels & label_length
+            label = np.array(text_to_int_sequence(texts[cur_index + i]))
+            labels[i, :len(label)] = label
+            label_length[i] = len(label)
+
+        # return the arrays
+        return (X_data, labels, input_length, label_length)
+
     def shuffle_data_by_partition(self, partition):
         """ Shuffle the training or validation data
         """

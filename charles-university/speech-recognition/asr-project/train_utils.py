@@ -19,14 +19,14 @@ from wer import wer
 
 
 class Metrics(Callback):
-    def __init__(self, input_to_softmax, audio_gen):
+    def __init__(self, input_to_softmax, audio_gen, print_metrics=False):
         super().__init__()
         self.input_to_softmax = input_to_softmax
         self.audio_gen = audio_gen
+        self.print_metrics = print_metrics
 
         self.transcr = audio_gen.valid_texts
         self.audio_path = audio_gen.valid_audio_paths
-
 
     def on_train_begin(self, logs={}):
         self.wer_log = []
@@ -44,15 +44,16 @@ class Metrics(Callback):
         self.wer_log.append(mean_error)
 
         print(' - val_wer: {:.2f}'.format(mean_error))
-        print()
-
-        print('Predictions')
-        print()
-
-        for i in range(5):
-            print('Pred:', pred[i])
-            print('True:', self.transcr[i])
+        if self.print_metrics:
             print()
+
+            print('Predictions')
+            print()
+
+            for i in range(5):
+                print('Pred:', pred[i])
+                print('True:', self.transcr[i])
+                print()
 
 
 def ctc_lambda_func(args):
@@ -82,12 +83,12 @@ def train_model(input_to_softmax,
                 minibatch_size=20,
                 spectrogram=True,
                 mfcc_dim=13,
-                optimizer=SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5),
+                optimizer=SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=4),
                 epochs=20,
                 verbose=1,
                 sort_by_duration=False,
                 max_duration=10.0,
-                save_metrics=False):
+                print_metrics=False):
     
     # create a class instance for obtaining batches of data
     audio_gen = AudioGenerator(minibatch_size=minibatch_size,
@@ -117,12 +118,11 @@ def train_model(input_to_softmax,
         os.makedirs('results')
 
     # add callbacks
-    metrics = Metrics(input_to_softmax, audio_gen)
+    metrics = Metrics(input_to_softmax, audio_gen, print_metrics)
     callbacks = [
-        ModelCheckpoint(filepath='results/' + save_model_path, verbose=0, save_best_only=True)
+        ModelCheckpoint(filepath='results/' + save_model_path, verbose=0, save_best_only=True),
+        metrics
     ]
-    if save_metrics:
-        callbacks.append(metrics)
 
     # train the model
     hist = model.fit_generator(generator=audio_gen.next_train(),
@@ -136,7 +136,5 @@ def train_model(input_to_softmax,
     # save model loss
     with open('results/'+pickle_path, 'wb') as f:
         pickle.dump(hist.history, f)
-
-    if save_metrics:
-        with open('results/wer.pickle', 'wb') as f:
-            pickle.dump(metrics.wer_log, f)
+    with open('results/wer_'+pickle_path, 'wb') as f:
+        pickle.dump(metrics.wer_log, f)

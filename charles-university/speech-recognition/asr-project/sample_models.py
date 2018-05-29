@@ -119,7 +119,7 @@ def bidirectional_rnn_model(input_dim, units, output_dim=29):
     return model
 
 
-def final_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2, rnn_units=256, rnn_layers=2, output_dim=29):
+def cnn_brnn_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2, rnn_units=200, rnn_layers=2, output_dim=29):
     """ Build a deep network for speech """
     input_data = Input(name='the_input', shape=(None, input_dim))
 
@@ -143,6 +143,36 @@ def final_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2, rnn_u
 
     model = Model(inputs=input_data, outputs=y_pred)
     model.output_length = lambda x: cnn_output_length(x, kernel_size, 'valid', conv_stride)
+    print(model.summary())
+
+    return model
+
+
+def cnn_brnn_dilated_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2,
+                           rnn_units=200, rnn_layers=2, output_dim=29, dilation=2):
+    """ Build a deep network for speech """
+    input_data = Input(name='the_input', shape=(None, input_dim))
+
+    conv_1d = Conv1D(filters,
+                     kernel_size,
+                     strides=conv_stride,
+                     padding='valid',
+                     activation='relu',
+                     name='conv1d',
+                     dilation_rate=dilation)(input_data)
+    bn_cnn = BatchNormalization(name='bn_conv_1d')(conv_1d)
+
+    x = bn_cnn
+    for i in range(rnn_layers):
+        rnn = GRU(rnn_units, activation='relu', return_sequences=True, implementation=2, name='rnn_{}'.format(i))
+        x = Bidirectional(rnn, name='brnn_{}'.format(i))(x)
+        x = BatchNormalization(name='bn_rnn_{}'.format(i))(x)
+
+    time_dense = TimeDistributed(Dense(output_dim))(x)
+    y_pred = Activation('softmax', name='softmax')(time_dense)
+
+    model = Model(inputs=input_data, outputs=y_pred)
+    model.output_length = lambda x: cnn_output_length(x, kernel_size, 'valid', conv_stride, dilation=dilation)
     print(model.summary())
 
     return model

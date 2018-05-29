@@ -22,11 +22,15 @@ class Metrics(Callback):
     def __init__(self, input_to_softmax, audio_gen):
         super().__init__()
         self.input_to_softmax = input_to_softmax
+        self.audio_gen = audio_gen
 
         self.transcr = audio_gen.valid_texts
         self.audio_path = audio_gen.valid_audio_paths
-        # self.data_points = np.array([audio_gen.normalize(audio_gen.featurize(ap)) for ap in self.audio_path])
-        self.data_points, *_ = audio_gen.get_data('valid')
+
+
+    def on_train_begin(self, logs={}):
+        self.wer_log = []
+        self.data_points, *_ = self.audio_gen.get_data('valid')
 
     def on_epoch_end(self, epoch, logs={}):
         predictions = self.input_to_softmax.predict(self.data_points)
@@ -37,8 +41,18 @@ class Metrics(Callback):
 
         error = [wer(r.split(), h.split()) for r, h in zip(self.transcr, pred)]
         mean_error = np.mean(error)
+        self.wer_log.append(mean_error)
 
-        print(" - val_wer: {:.2f}".format(mean_error))
+        print(' - val_wer: {:.2f}'.format(mean_error))
+        print()
+
+        print('Predictions')
+        print()
+
+        for i in range(5):
+            print('Pred:', pred[i])
+            print('True:', self.transcr[i])
+            print()
 
 
 def ctc_lambda_func(args):
@@ -72,7 +86,8 @@ def train_model(input_to_softmax,
                 epochs=20,
                 verbose=1,
                 sort_by_duration=False,
-                max_duration=10.0):
+                max_duration=10.0,
+                save_metrics=False):
     
     # create a class instance for obtaining batches of data
     audio_gen = AudioGenerator(minibatch_size=minibatch_size,
@@ -102,10 +117,12 @@ def train_model(input_to_softmax,
         os.makedirs('results')
 
     # add callbacks
+    metrics = Metrics(input_to_softmax, audio_gen)
     callbacks = [
-        ModelCheckpoint(filepath='results/' + save_model_path, verbose=0),
-        Metrics(input_to_softmax, audio_gen)
+        ModelCheckpoint(filepath='results/' + save_model_path, verbose=0, save_best_only=True)
     ]
+    if save_metrics:
+        callbacks.append(metrics)
 
     # train the model
     hist = model.fit_generator(generator=audio_gen.next_train(),
@@ -119,3 +136,7 @@ def train_model(input_to_softmax,
     # save model loss
     with open('results/'+pickle_path, 'wb') as f:
         pickle.dump(hist.history, f)
+
+    if save_metrics:
+        with open('results/wer.pickle', 'wb') as f:
+            pickle.dump(metrics.wer_log, f)

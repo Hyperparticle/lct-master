@@ -1,7 +1,7 @@
 from keras import backend as K
 from keras.models import Model
 from keras.layers import (BatchNormalization, Conv1D, Dense, Input, 
-    TimeDistributed, Activation, Bidirectional, GRU, LSTM)
+    TimeDistributed, Activation, Bidirectional, GRU, LSTM, Dropout)
 
 
 def simple_rnn_model(input_dim, output_dim=29):
@@ -119,7 +119,8 @@ def bidirectional_rnn_model(input_dim, units, output_dim=29):
     return model
 
 
-def cnn_brnn_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2, rnn_units=200, rnn_layers=2, output_dim=29):
+def cnn_brnn_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2,
+                   rnn_units=200, rnn_layers=2, output_dim=29):
     """ Build a deep network for speech """
     input_data = Input(name='the_input', shape=(None, input_dim))
 
@@ -148,7 +149,7 @@ def cnn_brnn_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2, rn
     return model
 
 
-def cnn_brnn_dilated_model(input_dim=161, filters=200, kernel_size=11, conv_stride=2,
+def cnn_brnn_dilated_model(input_dim=161, filters=200, kernel_size=11, conv_stride=1,
                            rnn_units=200, rnn_layers=2, output_dim=29, dilation=2):
     """ Build a deep network for speech """
     input_data = Input(name='the_input', shape=(None, input_dim))

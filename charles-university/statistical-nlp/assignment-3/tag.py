@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import itertools
 import nltk
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from collections import Counter, defaultdict
 
 
@@ -59,6 +59,31 @@ def evaluate(tagger_type, eval_func, langs=('en', 'cz')):
     columns = ['type', 'language', 'accuracies', 'mean', 'standard_deviation']
     results = pd.DataFrame(rows, columns=columns)
     return results
+
+
+def _ninf_array(shape):
+    res = np.empty(shape, np.float64)
+    res.fill(-np.inf)
+    return res
+
+
+def logsumexp2(arr):
+    max_ = arr.max()
+    return np.log2(np.sum(2 ** (arr - max_))) + max_
+
+
+def _log_add(*values):
+    """
+    Adds the logged values, returning the logarithm of the addition.
+    """
+    x = max(values)
+    if x > -np.inf:
+        sum_diffs = 0
+        for value in values:
+            sum_diffs += 2 ** (value - x)
+        return x + np.log2(sum_diffs)
+    else:
+        return x
 
 
 class LISmoother:
@@ -193,8 +218,8 @@ class HMMTagger:
         num_states = len(self.states)
         num_symbols = len(self.symbols)
 
-        self.transitions = np.zeros((num_states, num_states), np.float32)
-        self.emissions = np.zeros((num_states, num_symbols), np.float32)
+        self.transitions = _ninf_array((num_states, num_states))
+        self.emissions = _ninf_array((num_states, num_symbols))
 
     def smooth(self, heldout_data):
         """Smooth the transition and emission tables with linear interpolation smoothing"""
@@ -215,97 +240,159 @@ class HMMTagger:
             for k in range(num_symbols):
                 self.emissions[i, k] = np.log2(self.p_emission(self.states[i], self.symbols[k]))
 
-    # def train_unsupervised(self, unlabeled_sequences, max_iterations=50):
-    #     converged = False
-    #     iteration = 1
-    #
-    #     while not converged and iteration < max_iterations:
-    #         for sequence in unlabeled_sequences:
-    #             n = len(sequence)
-    #             m = len(self.states)
-    #             Yt = [self.symbols.index(yt) for yt in sequence]
-    #
-    #             alpha, beta, gamma = self.forward_backward(sequence)
-    #
-    #             xsi = np.zeros((n, m, m), dtype=np.float)
-    #             for t in range(n - 1):
-    #                 for i in range(m):
-    #                     for j in range(m):
-    #                         xsi[t, i, j] = (
-    #                                 alpha[t, i] *
-    #                                 self.p_transition(i, j) *
-    #                                 beta[t + 1, j] *
-    #                                 self.p_emission(j, Yt[t + 1])
-    #                         )
-    #                 xsi[t] /= np.sum(xsi[t])
-    #
-    #             # Update
-    #             pi = gamma[0]
-    #
-    #             transition_prob = np.zeros((m, m), dtype=np.float)
-    #             for i in range(m):
-    #                 den = np.sum(gamma[:, i])
-    #                 for j in range(m):
-    #                     transition_prob[i, j] = np.sum(xsi[:, i, j]) / den
-    #
-    #             emission_prob = np.zeros((m, len(self.symbols)), dtype=np.float)
-    #             for i in range(m):
-    #                 den = np.sum(gamma[:, i])
-    #                 for j in range(len(self.symbols)):
-    #                     emission_prob[i, j] = np.sum(gamma[np.array(Yt) == j, i]) / den
-    #
-    #         diff_transition = np.max(hmm.transition_prob - transition_prob)
-    #         diff_emission = np.max(hmm.emission_prob - emission_prob)
-    #         converged = diff_transition < eps and diff_emission < eps
-    #
-    #         iteration += 1
-    #
-    # def forward_backward(self, sequence):
-    #     Yt = [Y.index(yt) for yt in sequence]
-    #     n = len(sequence)
-    #     m = len(X)
-    #
-    #     alpha = self.forward(Yt)
-    #     beta = self.backward(Yt)
-    #     gamma = np.zeros((n, m), dtype=np.float)
-    #     for t in range(n):
-    #         gamma[t, :] = [alpha[t, i] * beta[t, i] for i in range(m)]
-    #         gamma[t, :] /= np.sum(gamma[t, :])
-    #
-    #     return alpha, beta, gamma
-    #
-    # def forward(self, Yt):
-    #     n = len(Yt)
-    #     m = len(X)
-    #     alpha = np.zeros((n, m), dtype=np.float)
-    #
-    #     alpha[0, :] = (
-    #         hmm.initial_prob
-    #             .dot(np.diag(self.p_emission([:, Yt[0]])))
-    #     )
-    #
-    #     for t in xrange(1, n):
-    #         alpha[t, :] = (
-    #             alpha[t - 1, :]
-    #                 .dot(hmm.transition_prob)
-    #                 .dot(np.diag(hmm.emission_prob[:, Yt[t]]))
-    #         )
-    #     return alpha
-    #
-    # def backward(self, Yt):
-    #     n = len(Yt)
-    #     m = len(X)
-    #     beta = np.zeros((n, m), dtype=mpf)
-    #
-    #     beta[n - 1, :] = [1.0] * m
-    #
-    #     for t in range(n - 2, -1, -1):
-    #         beta[t, :] = (
-    #             self.p_transition
-    #                 .dot(np.diag(hmm.emission_prob[:, Yt[t + 1]]))
-    #                 .dot(beta[t + 1, :].T)
-    #         )
-    #     return beta
+    def train_unsupervised(self, unlabeled_sequences, max_iterations=50, update_outputs=False):
+        N = len(self.states)
+        M = len(self.symbols)
+
+        converged = False
+        last_logprob = float('-inf')
+        iteration = 0
+        epsilon = 1e-6
+
+        while not converged and iteration < max_iterations:
+            A_numer = _ninf_array((N, N))
+            B_numer = _ninf_array((N, M))
+            A_denom = _ninf_array(N)
+            B_denom = _ninf_array(N)
+
+            logprob = 0
+            for sequence in tqdm(unlabeled_sequences):
+                sequence = list(sequence)
+                if not sequence:
+                    continue
+
+                (lpk, seq_A_numer, seq_A_denom, seq_B_numer, seq_B_denom) = self.forward_backward(sequence)
+
+                # add these sums to the global A and B values
+                for i in range(N):
+                    A_numer[i] = np.logaddexp2(A_numer[i], seq_A_numer[i] - lpk)
+                    B_numer[i] = np.logaddexp2(B_numer[i], seq_B_numer[i] - lpk)
+
+                A_denom = np.logaddexp2(A_denom, seq_A_denom - lpk)
+                B_denom = np.logaddexp2(B_denom, seq_B_denom - lpk)
+
+                logprob += lpk
+
+            # use the calculated values to update the transition and output
+            # probability values
+            for i in range(N):
+                logprob_Ai = A_numer[i] - A_denom[i]
+                logprob_Bi = B_numer[i] - B_denom[i]
+
+                # We should normalize all probabilities (see p.391 Huang et al)
+                # Let sum(P) be K.
+                # We can divide each Pi by K to make sum(P) == 1.
+                #   Pi' = Pi/K
+                #   log2(Pi') = log2(Pi) - log2(K)
+                logprob_Ai -= logsumexp2(logprob_Ai)
+                logprob_Bi -= logsumexp2(logprob_Bi)
+
+                # update output and transition probabilities
+                si = self.istates[i]
+
+                for j in range(N):
+                    sj = self.istates[j]
+                    self.transitions[si, sj] = logprob_Ai[j]
+
+                if update_outputs:
+                    for k in range(M):
+                        ok = self.isymbols[k]
+                        self.emissions[si, ok] = logprob_Bi[k]
+
+            # test for convergence
+            if iteration > 0 and abs(logprob - last_logprob) < epsilon:
+                converged = True
+
+            print('iteration', iteration, 'logprob', logprob)
+            iteration += 1
+            last_logprob = logprob
+
+    def forward_backward(self, sequence):
+        N = len(self.states)
+        M = len(self.symbols)
+        T = len(sequence)
+
+        # compute forward and backward probabilities
+        alpha = self.forward(sequence)
+        beta = self.backward(sequence)
+
+        # find the log probability of the sequence
+        lpk = logsumexp2(alpha[T-1])
+
+        A_numer = _ninf_array((N, N))
+        B_numer = _ninf_array((N, M))
+        A_denom = _ninf_array(N)
+        B_denom = _ninf_array(N)
+
+        transitions_logprob = self.transitions.T
+
+        for t in range(T):
+        # for t in range(T - 1):
+            symbol = sequence[t]
+            next_symbol = '###'
+            if t < T - 1:
+                next_symbol = sequence[t+1]
+            xi = self.symbols2i[symbol]
+
+            next_outputs_logprob = self.emissions[:, self.symbols2i[next_symbol]]
+            alpha_plus_beta = alpha[t] + beta[t]
+
+            if t < T - 1:
+                numer_add = transitions_logprob + next_outputs_logprob + \
+                            beta[t+1] + alpha[t].reshape(N, 1)
+                A_numer = np.logaddexp2(A_numer, numer_add)
+                A_denom = np.logaddexp2(A_denom, alpha_plus_beta)
+            else:
+                B_denom = np.logaddexp2(A_denom, alpha_plus_beta)
+
+            B_numer[:,xi] = np.logaddexp2(B_numer[:,xi], alpha_plus_beta)
+
+        return lpk, A_numer, A_denom, B_numer, B_denom
+
+    def forward(self, unlabeled_sequence):
+        T = len(unlabeled_sequence)
+        N = len(self.states)
+        alpha = _ninf_array((T, N))
+
+        transitions_logprob = self.transitions
+
+        # Initialization
+        symbol = unlabeled_sequence[0]
+        for i, state in enumerate(self.istates):
+            alpha[0, i] = self.emissions[state, self.symbols2i[symbol]]
+
+        # Induction
+        for t in range(1, T):
+            symbol = unlabeled_sequence[t]
+            output_logprob = self.emissions[:, self.symbols2i[symbol]]
+
+            for i in range(N):
+                summand = alpha[t - 1] + transitions_logprob[i]
+                alpha[t, i] = logsumexp2(summand) + output_logprob[i]
+
+        return alpha
+
+    def backward(self, unlabeled_sequence):
+        T = len(unlabeled_sequence)
+        N = len(self.states)
+        beta = _ninf_array((T, N))
+
+        transitions_logprob = self.transitions.T
+
+        # initialise the backward values;
+        # "1" is an arbitrarily chosen value from Rabiner tutorial
+        beta[T - 1, :] = np.log2(1)
+
+        # inductively calculate remaining backward values
+        for t in range(T - 2, -1, -1):
+            symbol = unlabeled_sequence[t + 1]
+            outputs = self.emissions[:, self.symbols2i[symbol]]
+
+            for i in range(N):
+                summand = transitions_logprob[i] + beta[t + 1] + outputs
+                beta[t, i] = logsumexp2(summand)
+
+        return beta
 
     def tag(self, words):
         # prev_states = [x for x in self.states if x[0] == None] if t == 1 else self.states
@@ -403,20 +490,25 @@ tag_set, word_set = list(set(tags)), list(set(words))
 # tag_set, word_set = set(nltk.bigrams(tags, pad_left=True)), set(words)
 
 labeled = train[:10_000]
-unlabeled = train[10_000:]
+unlabeled = train[10_000:20_000]
+sentences = sentence_split(test)
 
 tagger = HMMTagger(labeled, tag_set, word_set)
 tagger.smooth(heldout)
 
-sentences = sentence_split(test)
+print(tagger.evaluate(sentences[:100]))
+print()
 
-words, tags = list(zip(*sentences[0]))
+unlabeled_words = [list(zip(*sentence))[0] for sentence in sentence_split(unlabeled)]
+tagger.train_unsupervised(unlabeled_words, max_iterations=20)
 
-print("Tagger:")
-print(tagger.tag(words))
+print(tagger.evaluate(sentences[:100]))
+print()
 
-print(tags)
-print(words)
-
-# print()
-# print(tagger.evaluate(sentences[:20]))
+# words, tags = list(zip(*sentences[0]))
+#
+# print("Tagger:")
+# print(tagger.tag(words))
+#
+# print(tags)
+# print(words)

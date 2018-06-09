@@ -133,7 +133,7 @@ class LISmoother:
             self.p_uniform,
             self.p_unigram[w],
             self.p_bigram[t, w],
-            #             self.p_trigram[tprev, t, w]
+            # self.p_trigram[tprev, t, w]
         ])
 
 
@@ -186,7 +186,6 @@ class HMMTagger:
             self.transition_trigram[tprev2, tprev, t] = self.div(trigram_tag_dist[tprev2, tprev, t], bigram_tag_dist[tprev, t])
 
         for tprev, t in bigram_tag_dist:
-            # Use uniform distribution if tags not seen
             if (bigram_tag_dist[tprev, t], unigram_tag_dist[t]) == (0, 0):
                 self.transition_bigram[tprev, t] = self.state_uniform
             self.transition_bigram[tprev, t] = self.div(bigram_tag_dist[tprev, t], unigram_tag_dist[t])
@@ -196,7 +195,6 @@ class HMMTagger:
 
         # Build emission tables
         for t, w in bigram_output_dist:
-            # Use uniform distribution if tags not seen
             if (bigram_output_dist[t, w], unigram_tag_dist[t]) == (0, 0):
                 self.emission_bigram[t, w] = self.symbol_uniform
             self.emission_bigram[t, w] = self.div(bigram_output_dist[t, w], unigram_tag_dist[t])
@@ -221,6 +219,12 @@ class HMMTagger:
         self.transitions = _ninf_array((num_states, num_states))
         self.emissions = _ninf_array((num_states, num_symbols))
 
+        # for i in range(num_states):
+        #     for j in range(num_states):
+        #         self.transitions[i, j] = np.log2(self.p_transition(self.states[i], self.states[j]))
+        #     for k in range(num_symbols):
+        #         self.emissions[i, k] = np.log2(self.p_emission(self.states[i], self.symbols[k]))
+
     def smooth(self, heldout_data):
         """Smooth the transition and emission tables with linear interpolation smoothing"""
         heldout_trigrams = [(tprev, t, w) for (tprev, _), (t, w) in nltk.bigrams(heldout_data)]
@@ -240,7 +244,7 @@ class HMMTagger:
             for k in range(num_symbols):
                 self.emissions[i, k] = np.log2(self.p_emission(self.states[i], self.symbols[k]))
 
-    def train_unsupervised(self, unlabeled_sequences, max_iterations=50, update_outputs=False):
+    def train_unsupervised(self, unlabeled_sequences, max_iterations=50, update_outputs=True):
         N = len(self.states)
         M = len(self.symbols)
 
@@ -395,9 +399,6 @@ class HMMTagger:
         return beta
 
     def tag(self, words):
-        # prev_states = [x for x in self.states if x[0] == None] if t == 1 else self.states
-        # best_states = list(sorted(((s, V[t - 1, s]) for s in tagger.states), key=lambda x: x[1], reverse=True))[:n_best]
-        # best_states = [x[0] for x in best_states]
         seqlen = len(words)
         num_states = len(self.states)
 

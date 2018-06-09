@@ -1,7 +1,7 @@
 from keras import backend as K
 from keras.models import Model
 from keras.layers import (BatchNormalization, Conv1D, Dense, Input, 
-    TimeDistributed, Activation, Bidirectional, GRU, LSTM, Dropout)
+    TimeDistributed, Activation, Bidirectional, GRU, LSTM, Dropout, LeakyReLU, Add)
 
 
 def simple_rnn_model(input_dim, output_dim=29):
@@ -174,6 +174,40 @@ def cnn_brnn_dilated_model(input_dim=161, filters=200, kernel_size=11, conv_stri
 
     model = Model(inputs=input_data, outputs=y_pred)
     model.output_length = lambda x: cnn_output_length(x, kernel_size, 'valid', conv_stride, dilation=dilation)
+    print(model.summary())
+
+    return model
+
+
+def cnn_brnn_dropout_model(input_dim=161, filters=400, kernel_size=11, conv_stride=2,
+                           rnn_units=200, rnn_layers=2, output_dim=29, dropout=0.5):
+    """ Build a deep network for speech """
+    input_data = Input(name='the_input', shape=(None, input_dim))
+
+    conv_1d = Conv1D(filters,
+                     kernel_size,
+                     strides=conv_stride,
+                     padding='valid',
+                     name='conv1d',
+                     dilation_rate=1)(input_data)
+    bn_cnn = BatchNormalization(name='bn_conv_1d')(conv_1d)
+
+    x = bn_cnn
+    x = LeakyReLU()(x)
+    x = Dropout(dropout)(x)
+
+    for i in range(rnn_layers):
+        rnn = LSTM(rnn_units, return_sequences=True, name='rnn_{}'.format(i))
+        brnn = Bidirectional(rnn, name='brnn_{}'.format(i))(x)
+        brnn = BatchNormalization(name='bn_rnn_{}'.format(i))(brnn)
+        brnn = Dropout(dropout)(brnn)
+        x = Add()([x, brnn])
+
+    time_dense = TimeDistributed(Dense(output_dim))(x)
+    y_pred = Activation('softmax', name='softmax')(time_dense)
+
+    model = Model(inputs=input_data, outputs=y_pred)
+    model.output_length = lambda x: cnn_output_length(x, kernel_size, 'valid', conv_stride)
     print(model.summary())
 
     return model

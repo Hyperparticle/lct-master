@@ -8,7 +8,7 @@ import _pickle as pickle
 from keras import backend as K
 from keras.models import Model
 from keras.layers import (Input, Lambda)
-from keras.optimizers import SGD
+from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
 import os
 
@@ -83,13 +83,13 @@ def train_model(input_to_softmax,
                 minibatch_size=20,
                 spectrogram=True,
                 mfcc_dim=13,
-                optimizer=SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=4),
+                optimizer=Adam(lr=0.01, decay=1e-6, beta_2=0.99, epsilon=1e-6, clipnorm=4),
                 epochs=20,
                 verbose=1,
                 sort_by_duration=False,
                 max_duration=10.0,
                 print_metrics=False):
-    
+
     # create a class instance for obtaining batches of data
     audio_gen = AudioGenerator(minibatch_size=minibatch_size,
                                spectrogram=spectrogram,

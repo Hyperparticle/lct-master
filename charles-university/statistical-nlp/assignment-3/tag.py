@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import itertools
 import nltk
-from tqdm import tqdm, trange
-from collections import Counter, defaultdict
+from tqdm import tqdm_notebook as tqdm
+from collections import defaultdict
 
 
 def open_text(filename):
@@ -22,7 +22,7 @@ def isplit(iterable, splitters):
 
 
 def sentence_split(data, token=('###', '###')):
-    return isplit(data, (None, token))
+    return [[(token[0], token[0])] + g for g in isplit(data, (None, token))]
 
 
 def split_data(words, start=0):
@@ -61,7 +61,7 @@ def evaluate(tagger_type, eval_func, langs=('en', 'cz')):
     return results
 
 
-def _ninf_array(shape):
+def neg_inf_array(shape):
     res = np.empty(shape, np.float64)
     res.fill(-np.inf)
     return res
@@ -72,10 +72,7 @@ def logsumexp2(arr):
     return np.log2(np.sum(2 ** (arr - max_))) + max_
 
 
-def _log_add(*values):
-    """
-    Adds the logged values, returning the logarithm of the addition.
-    """
+def log_add(*values):
     x = max(values)
     if x > -np.inf:
         sum_diffs = 0
@@ -105,16 +102,16 @@ class LISmoother:
     def smooth(self, heldout_data, stop_tolerance=1e-4):
         """Computes the EM algorithm for linear interpolation smoothing"""
 
-        print('Lambdas:')
-        print(self.lambdas)
+        # print('Lambdas:')
+        # print(self.lambdas)
 
         next_l = self.next_lambda(self.lambdas, heldout_data)
         while not all(diff < stop_tolerance for diff in np.abs(self.lambdas - next_l)):
-            print(next_l)
+            # print(next_l)
             self.lambdas = next_l
             next_l = self.next_lambda(self.lambdas, heldout_data)
 
-        print(next_l)
+        # print(next_l)
         self.lambdas = next_l
 
     def next_lambda(self, lambdas, heldout):
@@ -144,19 +141,30 @@ class HMMTagger:
         self.states = list(sorted(tag_set))
         self.symbols = list(sorted(word_set))
 
-        self.text_size = len(tagged_data)
+        self.istates = np.arange(0, len(self.states))
+        self.states2i = {s: i for i, s in enumerate(self.states)}
 
-        # Transition tables - p(t | tprev2, tprev)
+        self.isymbols = np.arange(0, len(self.symbols))
+        self.symbols2i = {s: i for i, s in enumerate(self.symbols)}
+
+        self.text_size = sum(len(sequence) for sequence in tagged_data)
+
+        # Transition tables - p(t | tprev)
         self.transition_trigram = defaultdict(float)
         self.transition_bigram = defaultdict(float)
         self.transition_unigram = defaultdict(float)
         self.state_uniform = self.div(1, len(self.states))
 
-        # Emission tables - p(w | tprev, t)
+        # Emission tables - p(w | tprev)
         self.emission_bigram = defaultdict(float)
         self.emission_unigram = defaultdict(float)
         self.symbol_uniform = self.div(1, len(self.symbols))
 
+        self.prior_probs = defaultdict(float)
+
+        self.train_supervised(tagged_data)
+
+    def train_supervised(self, tagged_data):
         unigram_tag_dist = defaultdict(int)
         bigram_tag_dist = defaultdict(int)
         trigram_tag_dist = defaultdict(int)
@@ -165,30 +173,45 @@ class HMMTagger:
         bigram_output_dist = defaultdict(int)
         trigram_output_dist = defaultdict(int)
 
-        tprev, tprev2 = None, None
-        for w, t in tagged_data:
-            unigram_tag_dist[t] += 1
-            bigram_tag_dist[tprev, t] += 1
-            trigram_tag_dist[tprev2, tprev, t] += 1
+        prior_dist = defaultdict(int)
 
-            unigram_output_dist[w] += 1
-            bigram_output_dist[t, w] += 1
-            trigram_output_dist[tprev, t, w] += 1
+        for sequence in tagged_data:
+            tprev, tprev2 = None, None
+            for w, t in sequence:
+                # if tprev is None:
+                #     prior_dist[t] += 1
+                # else:
+                unigram_tag_dist[t] += 1
+                bigram_tag_dist[tprev, t] += 1
+                trigram_tag_dist[tprev2, tprev, t] += 1
 
-            tprev2 = tprev
-            tprev = t
+                unigram_output_dist[w] += 1
+                bigram_output_dist[t, w] += 1
+                trigram_output_dist[tprev, t, w] += 1
+
+                tprev2 = tprev
+                tprev = t
+
+        # Prior distribution
+        for t in self.states:
+            if prior_dist[t] == 0:
+                self.prior_probs[t] = self.state_uniform
+            else:
+                self.prior_probs[t] = self.div(prior_dist[t], len(self.states))
 
         # Build transition tables
         for tprev2, tprev, t in trigram_tag_dist:
             # Use uniform distribution if tags not seen
             if (trigram_tag_dist[tprev2, tprev, t], bigram_tag_dist[tprev, t]) == (0, 0):
                 self.transition_trigram[tprev2, tprev, t] = self.state_uniform
-            self.transition_trigram[tprev2, tprev, t] = self.div(trigram_tag_dist[tprev2, tprev, t], bigram_tag_dist[tprev, t])
+            else:
+                self.transition_trigram[tprev2, tprev, t] = self.div(trigram_tag_dist[tprev2, tprev, t], bigram_tag_dist[tprev, t])
 
         for tprev, t in bigram_tag_dist:
             if (bigram_tag_dist[tprev, t], unigram_tag_dist[t]) == (0, 0):
                 self.transition_bigram[tprev, t] = self.state_uniform
-            self.transition_bigram[tprev, t] = self.div(bigram_tag_dist[tprev, t], unigram_tag_dist[t])
+            else:
+                self.transition_bigram[tprev, t] = self.div(bigram_tag_dist[tprev, t], unigram_tag_dist[t])
 
         for t in unigram_tag_dist:
             self.transition_unigram[t] = self.div(unigram_tag_dist[t], self.text_size)
@@ -197,7 +220,8 @@ class HMMTagger:
         for t, w in bigram_output_dist:
             if (bigram_output_dist[t, w], unigram_tag_dist[t]) == (0, 0):
                 self.emission_bigram[t, w] = self.symbol_uniform
-            self.emission_bigram[t, w] = self.div(bigram_output_dist[t, w], unigram_tag_dist[t])
+            else:
+                self.emission_bigram[t, w] = self.div(bigram_output_dist[t, w], unigram_tag_dist[t])
 
         for w in unigram_output_dist:
             self.emission_unigram[w] = self.div(unigram_output_dist[w], self.text_size)
@@ -207,17 +231,15 @@ class HMMTagger:
         self.emission_smoother = LISmoother(self.symbol_uniform, self.emission_unigram,
                                             self.emission_bigram)
 
-        self.istates = np.arange(0, len(self.states))
-        self.states2i = {s: i for i, s in enumerate(self.states)}
-
-        self.isymbols = np.arange(0, len(self.symbols))
-        self.symbols2i = {s: i for i, s in enumerate(self.symbols)}
-
         num_states = len(self.states)
         num_symbols = len(self.symbols)
 
-        self.transitions = _ninf_array((num_states, num_states))
-        self.emissions = _ninf_array((num_states, num_symbols))
+        self.transitions = neg_inf_array((num_states, num_states))
+        self.emissions = neg_inf_array((num_states, num_symbols))
+
+        self.priors = np.zeros(len(self.states), np.float32)
+        for i in range(num_states):
+            self.priors[i] = np.log2(self.prior_probs[self.states[i]])
 
         # for i in range(num_states):
         #     for j in range(num_states):
@@ -228,12 +250,13 @@ class HMMTagger:
     def smooth(self, heldout_data):
         """Smooth the transition and emission tables with linear interpolation smoothing"""
         heldout_trigrams = [(tprev, t, w) for (tprev, _), (t, w) in nltk.bigrams(heldout_data)]
-        print("Smoothing transition table")
+        # print("Smoothing transition table")
         self.transition_smoother.smooth(heldout_trigrams)
+        # print()
 
-        print("Smoothing emission table")
+        # print("Smoothing emission table")
         self.emission_smoother.smooth(heldout_trigrams)
-        print()
+        # print()
 
         num_states = len(self.states)
         num_symbols = len(self.symbols)
@@ -244,7 +267,7 @@ class HMMTagger:
             for k in range(num_symbols):
                 self.emissions[i, k] = np.log2(self.p_emission(self.states[i], self.symbols[k]))
 
-    def train_unsupervised(self, unlabeled_sequences, max_iterations=50, update_outputs=True):
+    def train_unsupervised(self, unlabeled_sequences, max_iterations=5, update_outputs=True):
         N = len(self.states)
         M = len(self.symbols)
 
@@ -254,10 +277,10 @@ class HMMTagger:
         epsilon = 1e-6
 
         while not converged and iteration < max_iterations:
-            A_numer = _ninf_array((N, N))
-            B_numer = _ninf_array((N, M))
-            A_denom = _ninf_array(N)
-            B_denom = _ninf_array(N)
+            A_numer = neg_inf_array((N, N))
+            B_numer = neg_inf_array((N, M))
+            A_denom = neg_inf_array(N)
+            B_denom = neg_inf_array(N)
 
             logprob = 0
             for sequence in tqdm(unlabeled_sequences):
@@ -323,10 +346,10 @@ class HMMTagger:
         # find the log probability of the sequence
         lpk = logsumexp2(alpha[T-1])
 
-        A_numer = _ninf_array((N, N))
-        B_numer = _ninf_array((N, M))
-        A_denom = _ninf_array(N)
-        B_denom = _ninf_array(N)
+        A_numer = neg_inf_array((N, N))
+        B_numer = neg_inf_array((N, M))
+        A_denom = neg_inf_array(N)
+        B_denom = neg_inf_array(N)
 
         transitions_logprob = self.transitions.T
 
@@ -356,7 +379,7 @@ class HMMTagger:
     def forward(self, unlabeled_sequence):
         T = len(unlabeled_sequence)
         N = len(self.states)
-        alpha = _ninf_array((T, N))
+        alpha = neg_inf_array((T, N))
 
         transitions_logprob = self.transitions
 
@@ -379,7 +402,7 @@ class HMMTagger:
     def backward(self, unlabeled_sequence):
         T = len(unlabeled_sequence)
         N = len(self.states)
-        beta = _ninf_array((T, N))
+        beta = neg_inf_array((T, N))
 
         transitions_logprob = self.transitions.T
 
@@ -406,7 +429,7 @@ class HMMTagger:
         backpointers = -np.ones((seqlen, num_states), np.int)
 
         # Find the starting probabilities for each state
-        seq_probs[0] = self.emissions[:, self.symbols2i[words[0]]]
+        seq_probs[0] = self.priors + self.emissions[:, self.symbols2i[words[0]]]
 
         # Find the maximum probabilities for reaching each state at time t
         for t in range(1, seqlen):
@@ -452,64 +475,43 @@ class HMMTagger:
             self.emission_bigram[t, w]
         ])
 
-    #     def p_transition(self, tprev, t):
-    #         tprev2, tprev = tprev
-    #         return self.transition_smoother.lambdas.dot([
-    #             self.state_uniform,
-    #             self.transition_unigram[t],
-    #             self.transition_bigram[tprev, t],
-    #             self.transition[tprev2, tprev]
-    #         ])
-
-    #     def p_emission(self, t, w):
-    #         tprev, t = t
-    #         return self.emission_smoother.lambdas[:3].dot([
-    #             self.symbol_uniform,
-    #             self.emission_unigram[w],
-    #             self.emission_bigram[t, w]
-    #         ])
-
     def div(self, a, b):
         """Divides a and b safely"""
         return a / b if b != 0 else 0
 
 
-# Read the texts into memory
-english = './data/texten2.ptg'
-czech = './data/textcz2.ptg'
+if __name__ == "__main__":
+    # Read the texts into memory
+    english = './data/texten2.ptg'
+    czech = './data/textcz2.ptg'
 
-words_en = open_text(english)
-words_cz = open_text(czech)
+    words_en = open_text(english)
+    words_cz = open_text(czech)
 
-splits_en = split_all(words_en)
-splits_cz = split_all(words_cz)
+    splits_en = split_all(words_en)
+    splits_cz = split_all(words_cz)
 
-train, heldout, test = splits_en[0]
+    train, heldout, test = splits_en[0]
 
-words, tags = list(zip(*(train + heldout + test)))
-tag_set, word_set = list(set(tags)), list(set(words))
-# tag_set, word_set = set(nltk.bigrams(tags, pad_left=True)), set(words)
+    words, tags = list(zip(*(train + heldout + test)))
+    tag_set, word_set = list(set(tags)), list(set(words))
+    # tag_set, word_set = set(nltk.bigrams(tags, pad_left=True)), set(words)
 
-labeled = train[:10_000]
-unlabeled = train[10_000:20_000]
-sentences = sentence_split(test)
+    labeled_train = sentence_split(train[:10_000])
+    # labeled_train = sentence_split(train)
+    unlabeled_train = [list(zip(*sentence))[0] for sentence in sentence_split(train[10_000:])]
+    test_sentences = sentence_split(test)
 
-tagger = HMMTagger(labeled, tag_set, word_set)
-tagger.smooth(heldout)
+    tagger = HMMTagger(labeled_train, tag_set, word_set)
+    tagger.smooth(heldout)
 
-print(tagger.evaluate(sentences[:100]))
-print()
+    tagger.train_unsupervised(unlabeled_train, max_iterations=1)
 
-unlabeled_words = [list(zip(*sentence))[0] for sentence in sentence_split(unlabeled)]
-tagger.train_unsupervised(unlabeled_words, max_iterations=20)
+    print(tagger.evaluate(test_sentences))
+    print()
 
-print(tagger.evaluate(sentences[:100]))
-print()
-
-# words, tags = list(zip(*sentences[0]))
-#
-# print("Tagger:")
-# print(tagger.tag(words))
-#
-# print(tags)
-# print(words)
+    # unlabeled_words = [list(zip(*sentence))[0] for sentence in sentence_split(unlabeled)]
+    # tagger.train_unsupervised(unlabeled_words, max_iterations=20)
+    #
+    # print(tagger.evaluate(sentences))
+    # print()

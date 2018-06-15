@@ -198,7 +198,7 @@ def cnn_brnn_dropout_model(input_dim=161, filters=400, kernel_size=11, conv_stri
 
     for i in range(rnn_layers):
         rnn = LSTM(rnn_units, return_sequences=True, name='rnn_{}'.format(i))
-        brnn = Bidirectional(rnn, name='brnn_{}'.format(i))(x)
+        brnn = Bidirectional(rnn, name='brnn_{}'.format(i), merge_mode='sum')(x)
         brnn = BatchNormalization(name='bn_rnn_{}'.format(i))(brnn)
         brnn = Dropout(dropout)(brnn)
         x = Add()([x, brnn])
